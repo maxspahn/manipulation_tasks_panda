@@ -7,7 +7,6 @@
 '''
 
 import rospy
-# import tf2_ros
 from geometry_msgs.msg import PoseStamped, WrenchStamped, PointStamped, QuaternionStamped, Pose, TransformStamped
 from std_msgs.msg import Float32MultiArray, Bool
 from sensor_msgs.msg import JointState
@@ -18,6 +17,7 @@ import math
 import dynamic_reconfigure.client
 from pyquaternion import Quaternion
 from sympy import Point, Line
+from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_2_transformation, position_2_array
 
 class BoardDetector():
     '''
@@ -26,12 +26,10 @@ class BoardDetector():
     def __init__(self):
         self.r=rospy.Rate(100)
         self.sub = rospy.Subscriber('/cartesian_pose', PoseStamped, self.update_pose)
-        # self.sub = rospy.Subscriber('/touch_box', Bool, self.execute_touch)
         self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_checker)
-        self.col_pub = rospy.Publisher('/collided', Bool, queue_size=0)
+        self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
         self.configuration_pub = rospy.Publisher("/equilibrium_configuration", Float32MultiArray, queue_size=0)
-        self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
         self.ref_to_new_pose_pub = rospy.Publisher('/pose_ref_to_new', PoseStamped, queue_size=0)
         self.ref_to_new_pose = PoseStamped()
         self.collided = False
@@ -58,8 +56,6 @@ class BoardDetector():
         self.K_pos = 600
         self.K_ori = 50
         self.K_nul = 5.0
-        # self.tfbuffer = tf2_ros.Buffer()
-        # self.tflistener = tf2_ros.TransformListener(self.tfbuffer)
 
         self.flipped_case = False
         self.which_case = [0,0]
@@ -80,6 +76,7 @@ class BoardDetector():
         set_K.update_configuration({"rotational_stiffness_Y": k_r2})
         set_K.update_configuration({"rotational_stiffness_Z": k_r3})
         set_K.update_configuration({"nullspace_stiffness": k_ns})
+
     def set_configuration(self, joint):
         joint_des = Float32MultiArray()
         joint_des.data = np.array(joint).astype(np.float32)
@@ -108,6 +105,9 @@ class BoardDetector():
             self.collided = False
         else:
             self.collided = False
+
+    def trans_icp_callback(self, data):
+        self.pose_icp = data
 
     # TODO this would be much better in a config file since the points are now fixed
     # points defined with respect to local initially detected base frame
@@ -335,7 +335,7 @@ class BoardDetector():
 
         goal = PoseStamped()
         for i in range(step_num):
-            if self.curr_joint[6] > 2.85:
+            if self.curr_joint[6] > 3:
                 desired_joints = self.curr_joint
                 desired_joints[6] = desired_joints[6] - np.pi
                 self.set_configuration(desired_joints)
@@ -344,7 +344,7 @@ class BoardDetector():
                 self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 5)
                 self.flipped_case = True
                 q_goal = np.quaternion(0, 0, 0, 1) * q_goal
-            elif self.curr_joint[6] < -2.85:
+            elif self.curr_joint[6] < 3:
                 desired_joints = self.curr_joint
                 desired_joints[6] = desired_joints[6] + np.pi
                 self.set_configuration(desired_joints)
@@ -445,9 +445,6 @@ class BoardDetector():
 
         return goal
 
-    def trans_icp_callback(self, data):
-        self.pose_icp = data
-
     def box_pose_from_2_points(self, point1, rot1, point2, rot2):
 
         new_points = np.zeros((4,3))
@@ -476,61 +473,16 @@ class BoardDetector():
 
         intersect = np.array(l1.intersection(l2))[0]
 
-        rot_offset = np.zeros(3)
-        # if sum(self.which_case) % 2 == 0:
-        #     ori.z *= -1
-        # if self.which_case == [0,1]:
-        #     rot_offset = rot_matrix @ [self.offset, 0, 0]
-        #
-        # elif self.which_case == [0,1]:
-        #     rot_offset = rot_matrix @ [0, -self.offset, 0]
-        #
-        # elif self.which_case == [1,1]:
-        #     rot_offset = rot_matrix @ [self.offset, -self.offset, 0]
-
-        corrected_intersect = intersect + rot_offset
         pose = PoseStamped()
-        pose.pose.position.x = corrected_intersect[0]
-        pose.pose.position.y = corrected_intersect[1]
-        pose.pose.position.z = corrected_intersect[2]
+        pose.pose.position.x = intersect[0]
+        pose.pose.position.y = intersect[1]
+        pose.pose.position.z = intersect[2]
         pose.pose.orientation.w = ori.w
         pose.pose.orientation.x = ori.x
         pose.pose.orientation.y = ori.y
         pose.pose.orientation.z = ori.z
         
         return pose
-
-    def publish_static_cam(self):
-        broadcaster = tf2_ros.StaticTransformBroadcaster()
-        static_cam_tf = TransformStamped()
-        static_cam_tf.header.frame_id = "panda_link0"
-        static_cam_tf.header.stamp = rospy.Time.now()
-        static_cam_tf.child_frame_id = "camera_depth_optical_frame_static"
-        static_cam_tf.transform.translation.x = 0.483
-        static_cam_tf.transform.translation.y = 0.021
-        static_cam_tf.transform.translation.z = 0.58
-
-        static_cam_tf.transform.rotation.w = 0.006
-        static_cam_tf.transform.rotation.x = 0.734
-        static_cam_tf.transform.rotation.y = -0.679
-        static_cam_tf.transform.rotation.z = -0.006
-        broadcaster.sendTransform(static_cam_tf)
-
-    def publish_static_from_pose(self, pose, frame_name):
-        broadcaster = tf2_ros.StaticTransformBroadcaster()
-        static_tf = TransformStamped()
-        static_tf.header.frame_id = "panda_link0"
-        static_tf.header.stamp = rospy.Time.now()
-        static_tf.child_frame_id = frame_name
-        static_tf.transform.translation.x = pose.position.x
-        static_tf.transform.translation.y = pose.position.y
-        static_tf.transform.translation.z = pose.position.z
-
-        static_tf.transform.orientation.w = pose.orientation.w
-        static_tf.transform.orientation.x = pose.orientation.x
-        static_tf.transform.orientation.y = pose.orientation.y
-        static_tf.transform.orientation.z = pose.orientation.z
-        broadcaster.sendTransform(static_tf)
 
     def ref_to_new_transf_pose(self, pose_ref, pose_new):
         trans_new = [pose_new.pose.position.x, pose_new.pose.position.y, pose_new.pose.position.z]
@@ -585,14 +537,12 @@ if __name__ == '__main__':
         rospy.sleep(1.0)
         detector.trans = np.array([detector.pose_icp.position.x, detector.pose_icp.position.y, detector.pose_icp.position.z])
         detector.rot  = np.quaternion(detector.pose_icp.orientation.w, detector.pose_icp.orientation.x, detector.pose_icp.orientation.y, detector.pose_icp.orientation.z)
-        # detector.publish_static_cam()
         detector.execute_touch()
         print('two collision poses are', detector.coll_points_to_save, detector.coll_oris_to_save)
         pose_box_new = detector.box_pose_from_2_points(detector.coll_points_to_save[0], detector.coll_oris_to_save[0],
                                                        detector.coll_points_to_save[1], detector.coll_oris_to_save[1])
         print('new_pose is', pose_box_new)
-        # new_box_pose = rospy.Publisher('/new_box_pose', Pose, queue_size=0)
-        # new_box_pose.publish(pose_box_new)
+
         coll_points_ref = np.load('coll_points_ref_1850.npy')
         coll_oris_ref = np.load('coll_oris_ref_1850.npy')
         pose_box_ref = detector.box_pose_from_2_points(coll_points_ref[0], coll_oris_ref[0], coll_points_ref[1], coll_oris_ref[1])
@@ -601,6 +551,4 @@ if __name__ == '__main__':
     while not rospy.is_shutdown():
         detector.ref_to_new_pose_pub.publish(detector.ref_to_new_pose)
         rospy.sleep(1)
-        # detector.publish_static_from_pose(pose_box_ref, "ref_box")
-        # detector.publish_static_from_pose(pose_box_new, "new_box")
 
