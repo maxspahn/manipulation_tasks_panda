@@ -118,7 +118,6 @@ class BoardDetector():
         # These orientations are fixed throughout approach
         self.oriy = np.array([np.sqrt(0.5), 0, 0, -np.sqrt(0.5)])
 
-
         # I'm assuming we are putting the coordinate systems in a corner,
         # and that x-axis goes along length and y along width
 
@@ -188,20 +187,6 @@ class BoardDetector():
         np.save("coll_points_ref", self.coll_points_to_save)
         np.save("coll_oris_ref", self.coll_oris_to_save)
 
-        # for i in range(len(self.trajz)):
-        #     if self.collided:
-        #         break
-        #     goal = self.point_quat_to_goal(self.trajz[i], self.oriy, self.trans, self.rot)
-        #     self.go_to_pose(goal)
-
-        # self.coll_points_to_save = np.append(self.coll_points_to_save, self.coll_points[-1])
-        # self.coll_oris_to_save = np.append(self.coll_oris_to_save, self.coll_oris[-1])
-
-        # goal = self.point_quat_to_goal(self.trajz[0], self.oriy, self.trans, self.rot)
-        # self.go_to_pose(goal)
-        # np.save("coll_points2", self.coll_points_to_save.transpose())
-        # np.save("coll_oris1", self.coll_oris_to_save.transpose())
-
         return
     
     def execute_touch(self):
@@ -212,8 +197,6 @@ class BoardDetector():
             if i == 2: self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0.0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
-            # if self.collided:
-            #     break
             goal = self.point_quat_to_goal_ref_to_base(self.trajx[i], self.orix, self.trans_old, self.rot_old)
             goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
             self.go_to_pose(goal)
@@ -225,8 +208,6 @@ class BoardDetector():
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
-        # TODO consider not breaking when collision occurs, just recording the points?
-
         goal = self.point_quat_to_goal_ref_to_base(self.trajx[0], self.orix, self.trans_old, self.rot_old)
         goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
         self.go_to_pose(goal)
@@ -235,8 +216,6 @@ class BoardDetector():
             if i == 2: self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
-            # if self.collided:
-            #     break
             goal = self.point_quat_to_goal_ref_to_base(self.trajy[i], self.oriy, self.trans_old, self.rot_old)
             goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
             self.go_to_pose(goal)
@@ -253,24 +232,6 @@ class BoardDetector():
 
         np.save("coll_points_new", self.coll_points_to_save)
         np.save("coll_oris_new", self.coll_oris_to_save)
-
-        # for i in range(len(self.trajz)):
-        #     # if self.collided:
-        #     #     break
-        #     goal = self.point_quat_to_goal(self.trajz[i], self.oriy, self.trans, self.rot)
-        #     self.go_to_pose(goal)
-
-        # self.coll_points_to_save = np.append(self.coll_points_to_save, self.coll_points[-1])
-        # self.coll_oris_to_save = np.append(self.coll_oris_to_save, self.coll_oris[-1])
-
-        # # point_quat_to_goal converts to base frame
-        # goal = self.point_quat_to_goal_ref_to_base(self.trajz[0], self.oriy, self.trans, self.rot)
-        # goal = self.point_quat_to_goal_new_box
-        # goal = transform_cam 
-
-        # self.go_to_pose(goal)
-        # np.save("coll_points2", self.coll_points_to_save.transpose())
-        # np.save("coll_oris1", self.coll_oris_to_save.transpose())
 
         return
 
@@ -412,8 +373,6 @@ class BoardDetector():
         transform_icp = np.append(rot_matrix, [[0, 0, 0]], axis=0)
         transform_icp = np.append(transform_icp, [[trans[0]], [trans[1]], [trans[2]], [1]], axis=1)
 
-        # transform_cam = self.tfbuffer.lookup_transform('panda_link0', 'camera_depth_optical_frame_static', rospy.Time.now(), rospy.Duration(1.0))
-
         trans_cam = np.array([0.483, 0.021,
                                 0.58])
         quat_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
@@ -463,10 +422,6 @@ class BoardDetector():
         y_axis_new = new_points[1] - new_points[0]
 
         ori = quaternion.from_euler_angles(np.array([0, 0, np.arctan2(y_axis_new[1], y_axis_new[0])]))
-
-        # __import__('pdb').set_trace()
-
-        rot_matrix = quaternion.as_rotation_matrix(ori)
 
         l1 = Line(new_points[0], new_points[1])
         l2 = Line(new_points[2], new_points[3])
