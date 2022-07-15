@@ -16,3 +16,23 @@ def pose_2_transformation(pose_st: PoseStamped):
     transformation_matrix[0:3, 0:3] = rotation_matrix
     transformation_matrix[0:3, 3] = translation
     return transformation_matrix
+
+def array_quat_2_pose(pos_array, quat):
+    pose_st = PoseStamped()
+    pose_st.pose.position.x = pos_array[0]
+    pose_st.pose.position.y = pos_array[1]
+    pose_st.pose.position.z = pos_array[2]
+    pose_st.pose.orientation.x = quat.x
+    pose_st.pose.orientation.y = quat.y
+    pose_st.pose.orientation.z = quat.z
+    pose_st.pose.orientation.w = quat.w
+    return pose_st
+
+def transformation_2_pose(transformation_matrix):
+    pos_array = transformation_matrix[0:3, 3]
+    rotation_matrix = transformation_matrix[0:3, 0:3]
+    quat = quaternion.from_rotation_matrix(rotation_matrix)
+    pose_st = array_quat_2_pose(pos_array, quat)
+    return pose_st
+
+
