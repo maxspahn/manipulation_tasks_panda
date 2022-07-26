@@ -35,4 +35,9 @@ def transformation_2_pose(transformation_matrix):
     pose_st = array_quat_2_pose(pos_array, quat)
     return pose_st
 
+def transform_pose(pose, transformation_matrix):
+    pose_as_matrix = pose_2_transformation(pose)
+    transformed_pose_matrix = transformation_matrix @ pose_as_matrix
+    transformed_pose = transformation_2_pose(transformed_pose_matrix)
+    return transformed_pose
 
