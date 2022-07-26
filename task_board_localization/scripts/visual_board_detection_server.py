@@ -13,7 +13,7 @@ from geometry_msgs.msg import Pose
 
 import sys
 sys.path.append("../../")
-from icp_board_detector.srv import PointDetect, PointDetectRequest, PointDetectResponse
+from task_board_localization.srv import PointDetect, PointDetectRequest, PointDetectResponse
 
 def draw_registration_result(source, target, transformation):
     '''
