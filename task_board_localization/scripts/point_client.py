@@ -8,6 +8,10 @@ from geometry_msgs.msg import Pose
 from sensor_msgs.msg import PointCloud2
 
 def point_detect_client():
+    '''
+    running of the perception service client
+    @return:
+    '''
     print("check")
     rate = rospy.Rate(1)
 
