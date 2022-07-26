@@ -2,11 +2,9 @@
 
 import rospy
 import actionlib
-
 import roslib
 import time
 import quaternion
-
 import open3d as o3d
 import numpy as np
 import copy
@@ -18,6 +16,13 @@ sys.path.append("../../")
 from icp_board_detector.srv import PointDetect, PointDetectRequest, PointDetectResponse
 
 def draw_registration_result(source, target, transformation):
+    '''
+
+    @param source:
+    @param target:
+    @param transformation:
+    @return:
+    '''
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
     source_temp.paint_uniform_color([1, 0.706, 0])
