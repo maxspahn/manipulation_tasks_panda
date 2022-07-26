@@ -17,14 +17,13 @@ import math
 import dynamic_reconfigure.client
 from pyquaternion import Quaternion
 from sympy import Point, Line
-from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_2_transformation, position_2_array
-
+from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose
 class BoardDetector():
     '''
     a wrapper class for board detection
     '''
     def __init__(self):
-        self.r=rospy.Rate(100)
+        self.r = rospy.Rate(100)
         self.sub = rospy.Subscriber('/cartesian_pose', PoseStamped, self.update_pose)
         self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_checker)
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
@@ -42,8 +41,8 @@ class BoardDetector():
         self.torque_z = None
         self.curr_pos = np.empty([3])
         self.curr_ori = np.empty([3])
-        self.trajx = []
-        self.trajy = []
+        self.points_x = []
+        self.points_y = []
         self.trajz = []
         self.orix = []
         self.oriy = []
@@ -56,9 +55,6 @@ class BoardDetector():
         self.K_pos = 600
         self.K_ori = 50
         self.K_nul = 5.0
-
-        self.flipped_case = False
-        self.which_case = [0,0]
 
         self.trans_old = [0.3942, 0.1512, 0.16]
         self.rot_old = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
@@ -126,13 +122,13 @@ class BoardDetector():
         p2x = [p1x[0], p1x[1], -self.board_height*0.6]
         p3x = [self.board_width/2, p2x[1], p2x[2]]
 
-        self.trajx = [p1x, p2x, p3x]
+        self.points_x = [p1x, p2x, p3x]
 
         p1y = [self.board_length*0.7, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.7]
         p3y = [p2y[0], self.board_width * 0.35, p2y[2]]
 
-        self.trajy = [p1y, p2y, p3y]
+        self.points_y = [p1y, p2y, p3y]
 
         p1z = [self.board_length/2, self.board_width/2, self.clearance]
         p2z = [self.board_length/2, self.board_width/2, -self.board_height/2]
@@ -141,15 +137,28 @@ class BoardDetector():
 
         return
 
-    # TODO This can be a callback for a subscriber to a topic where the initially detected box is detected
-    #  so that it firsts sets the trans and rot (from the transform from the topic) and executes the touches
+    def transform_trajectory(self, poses, transform):
+        for pose in poses:
+            pose = transform_pose(pose)
+
+    def execute_trajectory(self, poses):
+        for i in range(len(poses)):
+            if i == range(len(poses)): self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0.0, 0.0)
+            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
+
+            self.go_to_pose(poses[i])
+
+        self.coll_points_to_save.append(self.coll_points[-1])
+        self.coll_oris_to_save.append(self.coll_oris[-1])
+
+        self.go_to_pose(poses[0])
 
     def execute_touch_ref(self):
         self.get_trajectories()
         K_z = 1000
 
         # Note stiffness in rotation about z is set to zero in last loop to allow gripper to 'straighten'
-        for i in range(len(self.trajx)):
+        for i in range(len(self.points_x)):
             print("Kpos", self.K_pos)
             if i == 2:
                 self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, 0.0, 0)
@@ -158,30 +167,28 @@ class BoardDetector():
 
             if self.collided:
                 break
-            goal = self.point_quat_to_goal_ref_to_base(self.trajx[i], self.orix, self.trans_old, self.rot_old)
+            goal = self.point_quat_to_goal_ref_to_base(self.points_x[i], self.orix, self.trans_old, self.rot_old)
             self.go_to_pose(goal)
 
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
-        # TODO consider not breaking when collision occurs, just recording the points?
-
-        goal = self.point_quat_to_goal_ref_to_base(self.trajx[0], self.orix, self.trans_old, self.rot_old)
+        goal = self.point_quat_to_goal_ref_to_base(self.points_x[0], self.orix, self.trans_old, self.rot_old)
         self.go_to_pose(goal)
 
-        for i in range(len(self.trajy)):
+        for i in range(len(self.points_y)):
             if i == 2: self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, 0, 0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, self.K_ori, 5.0)
 
             if self.collided:
                 break
-            goal = self.point_quat_to_goal_ref_to_base(self.trajy[i], self.oriy, self.trans_old, self.rot_old)
+            goal = self.point_quat_to_goal_ref_to_base(self.points_y[i], self.oriy, self.trans_old, self.rot_old)
             self.go_to_pose(goal)
 
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
-        goal = self.point_quat_to_goal_ref_to_base(self.trajy[0], self.oriy, self.trans_old, self.rot_old)
+        goal = self.point_quat_to_goal_ref_to_base(self.points_y[0], self.oriy, self.trans_old, self.rot_old)
         self.go_to_pose(goal)
 
         np.save("coll_points_ref", self.coll_points_to_save)
@@ -192,41 +199,32 @@ class BoardDetector():
     def execute_touch(self):
         self.get_trajectories()
         # Note stiffness in rotation about z is set to zero in last loop to allow gripper to 'straighten'
-        for i in range(len(self.trajx)):
-            self.flipped_case = False
+        for i in range(len(self.points_x)):
             if i == 2: self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0.0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
-            goal = self.point_quat_to_goal_ref_to_base(self.trajx[i], self.orix, self.trans_old, self.rot_old)
+            goal = self.point_quat_to_goal_ref_to_base(self.points_x[i], self.orix, self.trans_old, self.rot_old)
             goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
             self.go_to_pose(goal)
-            if self.flipped_case:
-                self.which_case[0] = 1
-                print("x collision is now flipped")
-                self.orix = np.quaternion(0,0,0,1) * self.orix
 
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
-        goal = self.point_quat_to_goal_ref_to_base(self.trajx[0], self.orix, self.trans_old, self.rot_old)
+        goal = self.point_quat_to_goal_ref_to_base(self.points_x[0], self.orix, self.trans_old, self.rot_old)
         goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
         self.go_to_pose(goal)
 
-        for i in range(len(self.trajy)):
+        for i in range(len(self.points_y)):
             if i == 2: self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
-            goal = self.point_quat_to_goal_ref_to_base(self.trajy[i], self.oriy, self.trans_old, self.rot_old)
+            goal = self.point_quat_to_goal_ref_to_base(self.points_y[i], self.oriy, self.trans_old, self.rot_old)
             goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
             self.go_to_pose(goal)
-            if self.flipped_case:
-                self.which_case[1] = 1
-                print("y collision is now flipped")
-                self.oriy = np.quaternion(0,0,0,1) * self.oriy
 
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
-        goal = self.point_quat_to_goal_ref_to_base(self.trajy[0], self.oriy, self.trans_old, self.rot_old)
+        goal = self.point_quat_to_goal_ref_to_base(self.points_y[0], self.oriy, self.trans_old, self.rot_old)
         goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
         self.go_to_pose(goal)
 
