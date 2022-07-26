@@ -62,7 +62,7 @@ def prepare_dataset(voxel_size, target):
     @return: raw and processed point clouds
     '''
     print(":: Load two point clouds and disturb initial pose.")
-    source = o3d.io.read_point_cloud("/home/richard/lxj/TU_Delft/erf2022/catkin_ws_LfD/src/ERF2022_TUDelft/icp_board_detector/scripts/final1.ply")
+    source = o3d.io.read_point_cloud("/task_board_localization/scripts/final1.ply")
     model_numpy = ros_numpy.numpify(target)
 
     xyz = [(x, y, z) for x, y, z, rgb in model_numpy]  # (why cannot put this line below rgb?)
@@ -85,7 +85,7 @@ def prepare_dataset(voxel_size, target):
     target = pcd.crop(box)
     source = source.crop(box)
 
-    # o3d.io.write_point_cloud("/home/richard/lxj/TU_Delft/erf2022/catkin_ws_LfD/src/ERF2022_TUDelft/icp_board_detector/scripts/final1.ply", target)
+    # o3d.io.write_point_cloud("/task_board_localization/scripts/final1.ply", target)
     # pcd_load = o3d.io.read_point_cloud("target.ply")
     # trans_init = np.asarray([[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
     #                          [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]])
