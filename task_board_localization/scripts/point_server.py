@@ -17,11 +17,11 @@ from icp_board_detector.srv import PointDetect, PointDetectRequest, PointDetectR
 
 def draw_registration_result(source, target, transformation):
     '''
-
-    @param source:
-    @param target:
-    @param transformation:
-    @return:
+    visualization for the global registration results
+    @param source: source point cloud
+    @param target: traget point cloud
+    @param transformation: transformation from global registration
+    @return: an image showing the results
     '''
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
@@ -31,7 +31,12 @@ def draw_registration_result(source, target, transformation):
     o3d.visualization.draw_geometries([source_temp, target_temp])
 
 def preprocess_point_cloud(pcd, voxel_size):
-    
+    '''
+    pre-processing of the point cloud, down-sampling and estimate the normal vectors
+    @param pcd: point cloud
+    @param voxel_size: a parameter that determines the voxel size for computing the features
+    @return: processed point cloud
+    '''
     print(":: Downsample with a voxel size %.3f." % voxel_size)
     pcd_down = pcd.voxel_down_sample(voxel_size)
 
@@ -50,6 +55,12 @@ def preprocess_point_cloud(pcd, voxel_size):
     return pcd_down, pcd_fpfh
 
 def prepare_dataset(voxel_size, target):
+    '''
+    read the point cloud data and crop the table plane
+    @param voxel_size: voxel size for processing step
+    @param target: target point cloud
+    @return: raw and processed point clouds
+    '''
     print(":: Load two point clouds and disturb initial pose.")
     source = o3d.io.read_point_cloud("/home/richard/lxj/TU_Delft/erf2022/catkin_ws_LfD/src/ERF2022_TUDelft/icp_board_detector/scripts/final1.ply")
     model_numpy = ros_numpy.numpify(target)
@@ -89,6 +100,15 @@ def prepare_dataset(voxel_size, target):
 
 def execute_global_registration(source_down, target_down, source_fpfh,
                                 target_fpfh, voxel_size):
+    '''
+    run RANSAC global registration step
+    @param source_down: down-sampled source point cloud
+    @param target_down: down-sampled target point cloud
+    @param source_fpfh: fpfh feature of the source point cloud
+    @param target_fpfh: fpfh feature of the target point cloud
+    @param voxel_size: voxel size
+    @return: transformation
+    '''
     distance_threshold = voxel_size * 1.5
     print(":: RANSAC registration on downsampled point clouds.")
     print("   Since the downsampling voxel size is %.3f," % voxel_size)
@@ -103,6 +123,16 @@ def execute_global_registration(source_down, target_down, source_fpfh,
     return result
 
 def refine_registration(source, target, source_fpfh, target_fpfh, voxel_size, result_ransac):
+    '''
+    point-to-plane icp step
+    @param source: source point cloud
+    @param target: target point cloud
+    @param source_fpfh: fpfh feature of the source point cloud
+    @param target_fpfh: fpfh feature of the target point cloud
+    @param voxel_size: voxel size
+    @param result_ransac: result from the global registration
+    @return: the refined transformation
+    '''
     distance_threshold = voxel_size * 0.4
     print(":: Point-to-plane ICP registration is applied on original point")
     print("   clouds to refine the alignment. This time we use a strict")
@@ -115,6 +145,11 @@ def refine_registration(source, target, source_fpfh, target_fpfh, voxel_size, re
 
 # gives the point cloud of the camera sensor (scene)
 def point_detect(req):
+    '''
+    given a request, execute the board visual detection
+    @param req: service request
+    @return: the transformation
+    '''
     voxel_size = 0.008  # means 5cm for the dataset
     source, target, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(voxel_size, req.cloud)
 
@@ -141,7 +176,10 @@ def point_detect(req):
     return PointDetectResponse(detected_pose)
     
 def point_server():
-    s = rospy.Service("point_detect", PointDetect, point_detect)    
+    '''
+    running the service
+    '''
+    s = rospy.Service("point_detect", PointDetect, point_detect)
 
 if __name__=="__main__":
     rospy.init_node("point_server")
