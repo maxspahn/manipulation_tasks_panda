@@ -29,8 +29,8 @@ class BoardDetector():
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
         self.configuration_pub = rospy.Publisher("/equilibrium_configuration", Float32MultiArray, queue_size=0)
-        self.ref_to_new_pose_pub = rospy.Publisher('/pose_ref_to_new', PoseStamped, queue_size=0)
-        self.ref_to_new_pose = PoseStamped()
+        self.pose_ref_to_new_pub = rospy.Publisher('/pose_ref_to_new', PoseStamped, queue_size=0)
+        self.pose_ref_to_new = PoseStamped()
         self.collided = False
         self.board_width = 0.16
         self.board_length = 0.26
@@ -63,8 +63,8 @@ class BoardDetector():
         self.trans_cam = np.array([0.483, 0.021, 0.58])
         self.rot_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
 
-        self.pose_icp = None
-        self.offset = 0.01
+        self.pose_icp = PoseStamped()
+        self.pose_box = PoseStamped()
 
     def set_stiffness(self, k_t1, k_t2, k_t3, k_r1, k_r2, k_r3, k_ns):
 
@@ -176,8 +176,12 @@ class BoardDetector():
         poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_x]
         self.execute_trajectory(self.poses_y)
 
-        np.save("coll_points_" + file_suffix, self.coll_points_to_save)
-        np.save("coll_oris_" + file_suffix, self.coll_oris_to_save)
+        np.save(f"coll_points_{file_suffix}", self.coll_points_to_save)
+        np.save(f"coll_oris_{file_suffix}", self.coll_oris_to_save)
+        self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
+                                                       self.coll_points_to_save[1], self.coll_oris_to_save[1])
+        transform_box = pose_2_transformation(self.pose_box)
+        np.save(f"transform_box_{file_suffix}", transform_box)
 
         return
 
@@ -261,8 +265,6 @@ class BoardDetector():
                 self.flipped_case = True
                 q_goal = np.quaternion(0, 0, 0, 1) * q_goal
 
-            # if self.collided:
-            #     break
             now = time.time()
             goal.header.seq = 1
             goal.header.stamp = rospy.Time.now()
@@ -377,9 +379,9 @@ if __name__ == '__main__':
         coll_points_ref = np.load('coll_points_ref_1850.npy')
         coll_oris_ref = np.load('coll_oris_ref_1850.npy')
         pose_box_ref = detector.box_pose_from_2_points(coll_points_ref[0], coll_oris_ref[0], coll_points_ref[1], coll_oris_ref[1])
-        detector.ref_to_new_pose = detector.ref_to_new_transf_pose(pose_box_ref, pose_box_new)
-        print(detector.ref_to_new_pose)
+        detector.pose_ref_to_new = detector.ref_to_new_transf_pose(pose_box_ref, pose_box_new)
+        print(detector.pose_ref_to_new)
     while not rospy.is_shutdown():
-        detector.ref_to_new_pose_pub.publish(detector.ref_to_new_pose)
+        detector.pose_ref_to_new_pub.publish(detector.pose_ref_to_new)
         rospy.sleep(1)
 
