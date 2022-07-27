@@ -24,13 +24,17 @@ class BoardDetector():
     '''
     def __init__(self):
         self.r = rospy.Rate(100)
+
         self.sub = rospy.Subscriber('/cartesian_pose', PoseStamped, self.update_pose)
         self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_checker)
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
+        self.transform_icp_sub = rospy.Subscriber('/trans_rot', PoseStamped, self.transform_icp_callback)
+
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
         self.configuration_pub = rospy.Publisher("/equilibrium_configuration", Float32MultiArray, queue_size=0)
-        self.pose_ref_to_new_pub = rospy.Publisher('/pose_ref_to_new', PoseStamped, queue_size=0)
-        self.pose_ref_to_new = PoseStamped()
+        self.pose_ref_2_new_pub = rospy.Publisher('/pose_ref_2_new', PoseStamped, queue_size=0)
+
+        self.pose_ref_2_new = PoseStamped()
         self.collided = False
         self.board_width = 0.16
         self.board_length = 0.26
@@ -50,15 +54,13 @@ class BoardDetector():
         self.coll_points_to_save = []
         self.coll_oris = [np.array([[0, 0, 0, 0]])]
         self.coll_oris_to_save = []
-        self.det_box_frame = 'test_1'
         self.force_threshold = 7
         self.K_pos = 600
         self.K_z = 1000
         self.K_ori = 50
-        self.K_nul = 5.0
 
-        self.trans_old = [0.3942, 0.1512, 0.16]
-        self.rot_old = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
+        self.trans_ref_guess = [0.3942, 0.1512, 0.16]
+        self.rot_ref_guess = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
 
         self.trans_cam = np.array([0.483, 0.021, 0.58])
         self.rot_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
@@ -76,11 +78,6 @@ class BoardDetector():
         set_K.update_configuration({"rotational_stiffness_Y": k_r2})
         set_K.update_configuration({"rotational_stiffness_Z": k_r3})
         set_K.update_configuration({"nullspace_stiffness": k_ns})
-
-    def set_configuration(self, joint):
-        joint_des = Float32MultiArray()
-        joint_des.data = np.array(joint).astype(np.float32)
-        self.configuration_pub.publish(joint_des)
 
     def joint_states_callback(self, data):
         self.curr_joint = data.position[:7]
@@ -106,7 +103,7 @@ class BoardDetector():
         else:
             self.collided = False
 
-    def trans_icp_callback(self, pose_icp):
+    def transform_icp_callback(self, pose_icp):
         self.pose_icp = pose_icp
 
     # TODO this would be much better in a config file since the points are now fixed
@@ -159,7 +156,7 @@ class BoardDetector():
         # the reference pose of the recordings), 'online' the perception is used to get the 'initial guess'
         if offline:
             file_suffix = "ref"
-            pose_box_ref_guess = array_quat_2_pose(self.trans_old, self.rot_old)
+            pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
             transform = pose_2_transformation(pose_box_ref_guess)
         else:
             file_suffix = "new"
@@ -246,24 +243,6 @@ class BoardDetector():
 
         goal = PoseStamped()
         for i in range(step_num):
-            if self.curr_joint[6] > 3:
-                desired_joints = self.curr_joint
-                desired_joints[6] = desired_joints[6] - np.pi
-                self.set_configuration(desired_joints)
-                self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 5)
-                rospy.sleep(5.0)
-                self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 5)
-                self.flipped_case = True
-                q_goal = np.quaternion(0, 0, 0, 1) * q_goal
-            elif self.curr_joint[6] < 3:
-                desired_joints = self.curr_joint
-                desired_joints[6] = desired_joints[6] + np.pi
-                self.set_configuration(desired_joints)
-                self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 5)
-                rospy.sleep(5.0)
-                self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 5)
-                self.flipped_case = True
-                q_goal = np.quaternion(0, 0, 0, 1) * q_goal
 
             now = time.time()
             goal.header.seq = 1
@@ -317,71 +296,23 @@ class BoardDetector():
         
         return pose
 
-    def ref_to_new_transf_pose(self, pose_ref, pose_new):
-        trans_new = [pose_new.pose.position.x, pose_new.pose.position.y, pose_new.pose.position.z]
-        quat_new = np.quaternion(pose_new.pose.orientation.w, pose_new.pose.orientation.x, pose_new.pose.orientation.y,
-                                 pose_new.pose.orientation.z)
-
-        rot_matrix_new = quaternion.as_rotation_matrix(quat_new)
-        transform_new = np.identity(4)
-        transform_new[0:3, 0:3] = rot_matrix_new
-        transform_new[0:3, 3] = trans_new
-
-        trans_ref = [pose_ref.pose.position.x, pose_ref.pose.position.y, pose_ref.pose.position.z]
-        quat_ref = np.quaternion(pose_ref.pose.orientation.w, pose_ref.pose.orientation.x, pose_ref.pose.orientation.y,
-                                 pose_ref.pose.orientation.z)
-
-        rot_matrix_ref = quaternion.as_rotation_matrix(quat_ref)
-        transform_ref = np.identity(4)
-        transform_ref[0:3, 0:3] = rot_matrix_ref
-        transform_ref[0:3, 3] = trans_ref
-
-        trans_ref_to_new = transform_new @ np.linalg.inv(transform_ref)
-        quat_to_new = quaternion.from_rotation_matrix(trans_ref_to_new[0:3, 0:3])
-
-        pose_ref_to_new = PoseStamped()
-        pose_ref_to_new.pose.position.x = trans_ref_to_new[0,3]
-        pose_ref_to_new.pose.position.y = trans_ref_to_new[1,3]
-        pose_ref_to_new.pose.position.z = trans_ref_to_new[2,3]
-        pose_ref_to_new.pose.orientation.x = quat_to_new.x
-        pose_ref_to_new.pose.orientation.y = quat_to_new.y
-        pose_ref_to_new.pose.orientation.z = quat_to_new.z
-        pose_ref_to_new.pose.orientation.w = quat_to_new.w
-
-        return pose_ref_to_new
-
 if __name__ == '__main__':
     offline = False
     
     rospy.init_node('BoardDetector', anonymous=True)
     detector = BoardDetector()
     time.sleep(1)
-    # Only does the reference poses with fixed axes to get reference points
-    if offline: 
-        detector.execute_touch_ref()
-        print('two collision poses are', detector.coll_points_to_save, detector.coll_oris_to_save)
-        pose_box_ref = detector.box_pose_from_2_points(detector.coll_points_to_save[0], detector.coll_oris_to_save[0],
-                                                    detector.coll_points_to_save[1], detector.coll_oris_to_save[1])
-        print('ref_pose is', pose_box_ref)
+    # Add line with request to the pointcloud server to fill out pose_icp
+    detector.execute_touch(offline)
+    print('two collision poses are\n', detector.coll_points_to_save, detector.coll_oris_to_save)
+    print('box pose is\n', detector.pose_box)
 
+    transform_ref = np.load("transform_box_ref")
+    transform_new = pose_2_transformation(detector.pose_box)
+    transform_ref_2_new = transform_new @ np.linalg.inv(transform_ref)
+    detector.pose_ref_2_new = transformation_2_pose(transform_ref_2_new)
 
-    if not offline:
-        trans_icp_sub = rospy.Subscriber('/trans_rot', PoseStamped, detector.trans_icp_callback)
-        rospy.sleep(1.0)
-        detector.trans = np.array([detector.pose_icp.position.x, detector.pose_icp.position.y, detector.pose_icp.position.z])
-        detector.rot  = np.quaternion(detector.pose_icp.orientation.w, detector.pose_icp.orientation.x, detector.pose_icp.orientation.y, detector.pose_icp.orientation.z)
-        detector.execute_touch()
-        print('two collision poses are', detector.coll_points_to_save, detector.coll_oris_to_save)
-        pose_box_new = detector.box_pose_from_2_points(detector.coll_points_to_save[0], detector.coll_oris_to_save[0],
-                                                       detector.coll_points_to_save[1], detector.coll_oris_to_save[1])
-        print('new_pose is', pose_box_new)
-
-        coll_points_ref = np.load('coll_points_ref_1850.npy')
-        coll_oris_ref = np.load('coll_oris_ref_1850.npy')
-        pose_box_ref = detector.box_pose_from_2_points(coll_points_ref[0], coll_oris_ref[0], coll_points_ref[1], coll_oris_ref[1])
-        detector.pose_ref_to_new = detector.ref_to_new_transf_pose(pose_box_ref, pose_box_new)
-        print(detector.pose_ref_to_new)
     while not rospy.is_shutdown():
-        detector.pose_ref_to_new_pub.publish(detector.pose_ref_to_new)
+        detector.pose_ref_2_new_pub.publish(detector.pose_ref_2_new)
         rospy.sleep(1)
 
