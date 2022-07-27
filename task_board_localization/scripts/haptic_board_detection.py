@@ -53,11 +53,15 @@ class BoardDetector():
         self.det_box_frame = 'test_1'
         self.force_threshold = 7
         self.K_pos = 600
+        self.K_z = 1000
         self.K_ori = 50
         self.K_nul = 5.0
 
         self.trans_old = [0.3942, 0.1512, 0.16]
         self.rot_old = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
+
+        self.trans_cam = np.array([0.483, 0.021, 0.58])
+        self.rot_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
 
         self.pose_icp = None
         self.offset = 0.01
@@ -102,8 +106,8 @@ class BoardDetector():
         else:
             self.collided = False
 
-    def trans_icp_callback(self, data):
-        self.pose_icp = data
+    def trans_icp_callback(self, pose_icp):
+        self.pose_icp = pose_icp
 
     # TODO this would be much better in a config file since the points are now fixed
     # points defined with respect to local initially detected base frame
@@ -123,28 +127,23 @@ class BoardDetector():
         p3x = [self.board_width/2, p2x[1], p2x[2]]
 
         self.points_x = [p1x, p2x, p3x]
+        self.poses_x = []
+        self.poses_x[:] = [array_quat_2_pose(point_x, self.orix) for point_x in self.points_x]
 
         p1y = [self.board_length*0.7, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.7]
         p3y = [p2y[0], self.board_width * 0.35, p2y[2]]
 
         self.points_y = [p1y, p2y, p3y]
-
-        p1z = [self.board_length/2, self.board_width/2, self.clearance]
-        p2z = [self.board_length/2, self.board_width/2, -self.board_height/2]
-
-        self.trajz = [p1z, p2z]
+        self.poses_y = []
+        self.poses_y[:] = [array_quat_2_pose(point_y, self.oriy) for point_y in self.points_y]
 
         return
 
-    def transform_trajectory(self, poses, transform):
-        for pose in poses:
-            pose = transform_pose(pose)
-
     def execute_trajectory(self, poses):
         for i in range(len(poses)):
-            if i == range(len(poses)): self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0.0, 0.0)
-            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
+            if i == range(len(poses)): self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
+            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
             self.go_to_pose(poses[i])
 
@@ -152,84 +151,33 @@ class BoardDetector():
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
         self.go_to_pose(poses[0])
-
-    def execute_touch_ref(self):
-        self.get_trajectories()
-        K_z = 1000
-
-        # Note stiffness in rotation about z is set to zero in last loop to allow gripper to 'straighten'
-        for i in range(len(self.points_x)):
-            print("Kpos", self.K_pos)
-            if i == 2:
-                self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, 0.0, 0)
-            else:
-                self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, self.K_ori, 5.0)
-
-            if self.collided:
-                break
-            goal = self.point_quat_to_goal_ref_to_base(self.points_x[i], self.orix, self.trans_old, self.rot_old)
-            self.go_to_pose(goal)
-
-        self.coll_points_to_save.append(self.coll_points[-1])
-        self.coll_oris_to_save.append(self.coll_oris[-1])
-
-        goal = self.point_quat_to_goal_ref_to_base(self.points_x[0], self.orix, self.trans_old, self.rot_old)
-        self.go_to_pose(goal)
-
-        for i in range(len(self.points_y)):
-            if i == 2: self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, 0, 0)
-            else:      self.set_stiffness(self.K_pos, self.K_pos, K_z, self.K_ori, self.K_ori, self.K_ori, 5.0)
-
-            if self.collided:
-                break
-            goal = self.point_quat_to_goal_ref_to_base(self.points_y[i], self.oriy, self.trans_old, self.rot_old)
-            self.go_to_pose(goal)
-
-        self.coll_points_to_save.append(self.coll_points[-1])
-        self.coll_oris_to_save.append(self.coll_oris[-1])
-
-        goal = self.point_quat_to_goal_ref_to_base(self.points_y[0], self.oriy, self.trans_old, self.rot_old)
-        self.go_to_pose(goal)
-
-        np.save("coll_points_ref", self.coll_points_to_save)
-        np.save("coll_oris_ref", self.coll_oris_to_save)
-
-        return
     
-    def execute_touch(self):
+    def execute_touch(self, offline):
         self.get_trajectories()
-        # Note stiffness in rotation about z is set to zero in last loop to allow gripper to 'straighten'
-        for i in range(len(self.points_x)):
-            if i == 2: self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0.0, 0.0)
-            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
-            goal = self.point_quat_to_goal_ref_to_base(self.points_x[i], self.orix, self.trans_old, self.rot_old)
-            goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
-            self.go_to_pose(goal)
+        # 'Offline' you manually input a guess of the box pose to then save an accurate pose from the touch (to have
+        # the reference pose of the recordings), 'online' the perception is used to get the 'initial guess'
+        if offline:
+            file_suffix = "ref"
+            pose_box_ref_guess = array_quat_2_pose(self.trans_old, self.rot_old)
+            transform = pose_2_transformation(pose_box_ref_guess)
+        else:
+            file_suffix = "new"
+            pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
+            transform_cam = pose_2_transformation(pose_cam)
+            transform_icp = pose_2_transformation(self.pose_icp)
+            transform = np.linalg.inv(transform_cam) @ transform_icp @ transform_cam
 
-        self.coll_points_to_save.append(self.coll_points[-1])
-        self.coll_oris_to_save.append(self.coll_oris[-1])
+        poses_x_transformed = []
+        poses_x_transformed[:] = [transform_pose(pose_x, transform) for pose_x in self.poses_x]
+        self.execute_trajectory(self.poses_x)
 
-        goal = self.point_quat_to_goal_ref_to_base(self.points_x[0], self.orix, self.trans_old, self.rot_old)
-        goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
-        self.go_to_pose(goal)
+        poses_y_transformed = []
+        poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_x]
+        self.execute_trajectory(self.poses_y)
 
-        for i in range(len(self.points_y)):
-            if i == 2: self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 0.0)
-            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 0.0)
-
-            goal = self.point_quat_to_goal_ref_to_base(self.points_y[i], self.oriy, self.trans_old, self.rot_old)
-            goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
-            self.go_to_pose(goal)
-
-        self.coll_points_to_save.append(self.coll_points[-1])
-        self.coll_oris_to_save.append(self.coll_oris[-1])
-        goal = self.point_quat_to_goal_ref_to_base(self.points_y[0], self.oriy, self.trans_old, self.rot_old)
-        goal = self.point_quat_to_goal_new_box(goal, self.trans, self.rot)
-        self.go_to_pose(goal)
-
-        np.save("coll_points_new", self.coll_points_to_save)
-        np.save("coll_oris_new", self.coll_oris_to_save)
+        np.save("coll_points_" + file_suffix, self.coll_points_to_save)
+        np.save("coll_oris_" + file_suffix, self.coll_oris_to_save)
 
         return
 
@@ -332,76 +280,6 @@ class BoardDetector():
             self.goal_pub.publish(goal)
             self.r.sleep()
 
-    # Takes a pose (as a point and quaternion orientation in arrays), converts to PoseStamped msg, and transforms
-    # from your source_frame (specified by trans and rot) to panda_link0
-    def point_quat_to_goal_ref_to_base(self, point, ori, trans, rot):
-
-        goal = PoseStamped()
-
-        quat_ori = np.quaternion(ori[0], ori[1], ori[2], ori[3])
-        # Converting the quaternion to rotation matrix, to make a homogenous transformation and transform the points
-        # with one matrix operation 'transform @ point'
-        rot_matrix = quaternion.as_rotation_matrix(rot)
-        transform = np.append(rot_matrix, [[0, 0, 0]], axis=0)
-        transform = np.append(transform, [[trans[0]], [trans[1]], [trans[2]], [1]], axis=1)
-        point = np.array([point[0], point[1], point[2], 1])
-        new_point = transform @ point
-
-        # Note 'extra' final rotation by q(0, 1, 0, 0) (180 deg about x axis) since we want gripper facing down
-        new_ori = np.quaternion(0, 0, 0, 1) * np.quaternion(0, 1, 0, 0) * rot * quat_ori
-        print("new_ori", new_ori)
-        goal.pose.position.x = new_point[0]
-        goal.pose.position.y = new_point[1]
-        goal.pose.position.z = new_point[2]
-
-        goal.pose.orientation.w = new_ori.w
-        goal.pose.orientation.x = new_ori.x
-        goal.pose.orientation.y = new_ori.y
-        goal.pose.orientation.z = new_ori.z
-
-        return goal
-
-    def point_quat_to_goal_new_box(self, goal, trans, rot):
-
-        point = [goal.pose.position.x, goal.pose.position.y, goal.pose.position.z, 1]
-        quat_ori = np.quaternion(goal.pose.orientation.w, goal.pose.orientation.x,
-                                goal.pose.orientation.y, goal.pose.orientation.z)
-
-        rot_matrix = quaternion.as_rotation_matrix(rot)
-        transform_icp = np.append(rot_matrix, [[0, 0, 0]], axis=0)
-        transform_icp = np.append(transform_icp, [[trans[0]], [trans[1]], [trans[2]], [1]], axis=1)
-
-        trans_cam = np.array([0.483, 0.021,
-                                0.58])
-        quat_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
-        rot_matrix_cam = quaternion.as_rotation_matrix(quat_cam)
-        transform_matrix_cam = np.append(rot_matrix_cam, [[0, 0, 0]], axis=0)
-        transform_matrix_cam = np.append(transform_matrix_cam, [[trans_cam[0]], [trans_cam[1]], [trans_cam[2]], [1]], axis=1)
-        # Converting the quaternion to rotation matrix, to make a homogenous transformation and transform the points
-        # with one matrix operation 'transform @ point'
-
-        point1 = np.linalg.inv(transform_matrix_cam) @ point
-        # print('first ', point1)
-        # point1_other = transform_matrix_cam @ point
-        # print('second ', point1_other)
-        point2 = transform_icp @ point1
-        new_point = transform_matrix_cam @ point2
-
-        new_ori = quat_cam.inverse() * rot * quat_cam * quat_ori
-
-        goal = PoseStamped()
-
-        goal.pose.position.x = new_point[0]
-        goal.pose.position.y = new_point[1]
-        goal.pose.position.z = new_point[2]
-
-        goal.pose.orientation.w = new_ori.w
-        goal.pose.orientation.x = new_ori.x
-        goal.pose.orientation.y = new_ori.y
-        goal.pose.orientation.z = new_ori.z
-
-        return goal
-
     def box_pose_from_2_points(self, point1, rot1, point2, rot2):
 
         new_points = np.zeros((4,3))
@@ -486,7 +364,7 @@ if __name__ == '__main__':
 
 
     if not offline:
-        trans_icp_sub = rospy.Subscriber('/trans_rot', Pose, detector.trans_icp_callback)
+        trans_icp_sub = rospy.Subscriber('/trans_rot', PoseStamped, detector.trans_icp_callback)
         rospy.sleep(1.0)
         detector.trans = np.array([detector.pose_icp.position.x, detector.pose_icp.position.y, detector.pose_icp.position.z])
         detector.rot  = np.quaternion(detector.pose_icp.orientation.w, detector.pose_icp.orientation.x, detector.pose_icp.orientation.y, detector.pose_icp.orientation.z)
