@@ -25,13 +25,14 @@ class BoardDetector():
     def __init__(self):
         self.r = rospy.Rate(100)
 
+        self.force_threshold = 7
+
         self.sub = rospy.Subscriber('/cartesian_pose', PoseStamped, self.update_pose)
         self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_checker)
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
         self.transform_icp_sub = rospy.Subscriber('/trans_rot', PoseStamped, self.transform_icp_callback)
 
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
-        self.configuration_pub = rospy.Publisher("/equilibrium_configuration", Float32MultiArray, queue_size=0)
         self.pose_ref_2_new_pub = rospy.Publisher('/pose_ref_2_new', PoseStamped, queue_size=0)
 
         self.pose_ref_2_new = PoseStamped()
@@ -39,7 +40,7 @@ class BoardDetector():
         self.board_width = 0.16
         self.board_length = 0.26
         self.board_height = 0.07
-        self.clearance = 0.1
+        self.clearance = 0.07
         self.detected = False
         self.force_feedback = None
         self.torque_z = None
@@ -48,24 +49,24 @@ class BoardDetector():
         self.points_x = []
         self.points_y = []
         self.trajz = []
-        self.orix = []
-        self.oriy = []
+        self.ori_x = np.quaternion(1, 0, 0, 0)
+        self.ori_y = np.quaternion(1, 0, 0, 0)
         self.coll_points = [np.array([[0, 0, 0]])]
         self.coll_points_to_save = []
         self.coll_oris = [np.array([[0, 0, 0, 0]])]
         self.coll_oris_to_save = []
-        self.force_threshold = 7
         self.K_pos = 600
         self.K_z = 1000
         self.K_ori = 50
 
-        self.trans_ref_guess = [0.3942, 0.1512, 0.16]
+        self.trans_ref_guess = [0.45, 0.1512, 0.16]
         self.rot_ref_guess = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
 
         self.trans_cam = np.array([0.483, 0.021, 0.58])
         self.rot_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
 
         self.pose_icp = PoseStamped()
+        self.pose_icp.pose.orientation.w = 1
         self.pose_box = PoseStamped()
 
     def set_stiffness(self, k_t1, k_t2, k_t3, k_r1, k_r2, k_r3, k_ns):
@@ -110,10 +111,10 @@ class BoardDetector():
     # points defined with respect to local initially detected base frame
     def get_trajectories(self):
         # For x-axis approach we just want the orientation to be aligned with local frame
-        self.orix = np.array([1, 0, 0, 0])
+        self.ori_x = np.quaternion(0, 1, 0, 0)
         # For y-axis orientation just a 90 deg rotation about z-axis to touch with same flat side of flange
         # These orientations are fixed throughout approach
-        self.oriy = np.array([np.sqrt(0.5), 0, 0, -np.sqrt(0.5)])
+        self.ori_y = np.quaternion(0, np.sqrt(0.5), np.sqrt(0.5), 0)
 
         # I'm assuming we are putting the coordinate systems in a corner,
         # and that x-axis goes along length and y along width
@@ -125,7 +126,7 @@ class BoardDetector():
 
         self.points_x = [p1x, p2x, p3x]
         self.poses_x = []
-        self.poses_x[:] = [array_quat_2_pose(point_x, self.orix) for point_x in self.points_x]
+        self.poses_x[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
 
         p1y = [self.board_length*0.7, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.7]
@@ -133,7 +134,7 @@ class BoardDetector():
 
         self.points_y = [p1y, p2y, p3y]
         self.poses_y = []
-        self.poses_y[:] = [array_quat_2_pose(point_y, self.oriy) for point_y in self.points_y]
+        self.poses_y[:] = [array_quat_2_pose(point_y, self.ori_y) for point_y in self.points_y]
 
         return
 
@@ -163,15 +164,16 @@ class BoardDetector():
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
             transform_cam = pose_2_transformation(pose_cam)
             transform_icp = pose_2_transformation(self.pose_icp)
-            transform = np.linalg.inv(transform_cam) @ transform_icp @ transform_cam
+            transform_ref = np.load("transform_box_ref")
+            transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
 
         poses_x_transformed = []
         poses_x_transformed[:] = [transform_pose(pose_x, transform) for pose_x in self.poses_x]
-        self.execute_trajectory(self.poses_x)
+        self.execute_trajectory(poses_x_transformed)
 
         poses_y_transformed = []
-        poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_x]
-        self.execute_trajectory(self.poses_y)
+        poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_y]
+        self.execute_trajectory(poses_y_transformed)
 
         np.save(f"coll_points_{file_suffix}", self.coll_points_to_save)
         np.save(f"coll_oris_{file_suffix}", self.coll_oris_to_save)
