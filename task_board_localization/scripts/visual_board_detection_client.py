@@ -2,7 +2,7 @@
 
 import sys
 import rospy
-from icp_board_detector.srv import PointDetect, PointDetectRequest, PointDetectResponse
+from task_board_localization.srv import PointDetect, PointDetectRequest, PointDetectResponse
 
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import PointCloud2
