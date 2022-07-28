@@ -59,7 +59,7 @@ class BoardDetector():
         self.K_z = 1000
         self.K_ori = 50
 
-        self.trans_ref_guess = [0.45, 0.1512, 0.16]
+        self.trans_ref_guess = [0.5, 0.1512, 0.16]
         self.rot_ref_guess = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
 
         self.trans_cam = np.array([0.483, 0.021, 0.58])
@@ -139,11 +139,11 @@ class BoardDetector():
         return
 
     def execute_trajectory(self, poses):
-        for i in range(len(poses)):
-            if i == range(len(poses)): self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
+        for pose in poses:
+            if pose == poses[-1]: self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
-            self.go_to_pose(poses[i])
+            self.go_to_pose(pose)
 
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
@@ -164,7 +164,7 @@ class BoardDetector():
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
             transform_cam = pose_2_transformation(pose_cam)
             transform_icp = pose_2_transformation(self.pose_icp)
-            transform_ref = np.load("transform_box_ref")
+            transform_ref = np.load("transform_box_ref.npy")
             transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
 
         poses_x_transformed = []
@@ -282,6 +282,9 @@ class BoardDetector():
 
         ori = quaternion.from_euler_angles(np.array([0, 0, np.arctan2(y_axis_new[1], y_axis_new[0])]))
 
+        # Rotate resulting orientation by 90 degrees to match our convention of the box frame
+        ori = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * ori
+
         l1 = Line(new_points[0], new_points[1])
         l2 = Line(new_points[2], new_points[3])
 
@@ -309,7 +312,7 @@ if __name__ == '__main__':
     print('two collision poses are\n', detector.coll_points_to_save, detector.coll_oris_to_save)
     print('box pose is\n', detector.pose_box)
 
-    transform_ref = np.load("transform_box_ref")
+    transform_ref = np.load("transform_box_ref.npy")
     transform_new = pose_2_transformation(detector.pose_box)
     transform_ref_2_new = transform_new @ np.linalg.inv(transform_ref)
     detector.pose_ref_2_new = transformation_2_pose(transform_ref_2_new)
