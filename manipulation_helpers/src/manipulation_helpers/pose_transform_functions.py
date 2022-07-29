@@ -45,3 +45,6 @@ def transform_pose(pose: PoseStamped, transformation_matrix):
     transformed_pose = transformation_2_pose(transformed_pose_matrix)
     return transformed_pose
 
+def list_2_quaternion(quaternion_list: list):
+    return np.quaternion(quaternion_list[0], quaternion_list[1], quaternion_list[2], quaternion_list[3])
+

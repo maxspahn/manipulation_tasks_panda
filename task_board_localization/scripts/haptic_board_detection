@@ -17,7 +17,7 @@ import math
 import dynamic_reconfigure.client
 from pyquaternion import Quaternion
 from sympy import Point, Line
-from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose
+from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 import sys
 
 class BoardDetector():
@@ -27,18 +27,18 @@ class BoardDetector():
     def __init__(self):
         self.r = rospy.Rate(100)
 
-        self.force_threshold = rospy.get_param('board_touch/force_threshold', '7')
-        self.board_width = rospy.get_param('board_touch/width', '0.16')
-        self.board_length = rospy.get_param('board_touch/length', '0.26')
-        self.board_height = rospy.get_param('board_touch/height', '0.07')
-        self.clearance = rospy.get_param('board_touch/clearance', '0.07')
-        self.K_pos = rospy.get_param('stiffness/K_pos', '600')
-        self.K_z = rospy.get_param('stiffness/K_z', '1000')
-        self.K_ori = rospy.get_param('stiffness/K_ori', '50')
+        self.force_threshold = rospy.get_param('board_touch/force_threshold', 7)
+        self.board_width = rospy.get_param('board_touch/width', 0.16)
+        self.board_length = rospy.get_param('board_touch/length', 0.26)
+        self.board_height = rospy.get_param('board_touch/height', 0.07)
+        self.clearance = rospy.get_param('board_touch/clearance', 0.07)
+        self.K_pos = rospy.get_param('stiffness/K_pos', 600)
+        self.K_z = rospy.get_param('stiffness/K_z', 1000)
+        self.K_ori = rospy.get_param('stiffness/K_ori', 50)
         self.trans_ref_guess = np.array(rospy.get_param('pose_box_ref_guess/trans_ref_guess', '[0.5, 0.1512, 0.16]'))
-        self.rot_ref_guess = np.quaternion(rospy.get_param('pose_box_ref_guess/rot_ref_guess', '[0.7148849557796, 0, 0, -0.699187185237258]'))
+        self.rot_ref_guess = list_2_quaternion(rospy.get_param('pose_box_ref_guess/rot_ref_guess', '[0.7148849557796, 0, 0, -0.699187185237258]'))
         self.trans_cam = np.array(rospy.get_param('transform_cam/trans_cam', '[0.483, 0.021, 0.58]'))
-        self.rot_cam = np.quaternion(rospy.get_param('transform_cam/rot_cam', '[0.006, 0.734, -0.679, 0.006]'))
+        self.rot_cam = list_2_quaternion(rospy.get_param('transform_cam/rot_cam', '[0.006, 0.734, -0.679, 0.006]'))
         cartesian_pose_topic = rospy.get_param('cartesian_pose_topic_name', '/cartesian_pose')
         force_torque_ext_topic = rospy.get_param('force_torque_ext_topic', '/force_torque_ext')
         equilibrium_pose_topic = rospy.get_param('equilibrium_pose_topic', '/equilibrium_pose')
@@ -300,12 +300,11 @@ class BoardDetector():
         return pose
 
 if __name__ == '__main__':
-    if sys.argv[1]:
-        offline = sys.argv[1]
-    else:
-        offline = True
     
     rospy.init_node('BoardDetector', anonymous=True)
+    offline = rospy.get_param('with_initial_pose')
+    rospy.loginfo(type(offline))
+    rospy.loginfo(f"Using an initial guess defined by the user {offline}")
     detector = BoardDetector()
     time.sleep(1)
     # Add line with request to the pointcloud server to fill out pose_icp

@@ -1,4 +1,7 @@
+<?xml version="1.0" ?>
 <launch>
-  <node name="haptic_board_detection" pkg="task_board_localization" type="haptic_board_detection" />
-  <rosparam file="$(task_board_localization)/config/board_touch_config.yaml" />
+  <arg name="with_initial_pose" default="true"/>
+  <param name="with_initial_pose" value="$(arg with_initial_pose)"/>
+  <rosparam command="load" file="$(find task_board_localization)/config/board_touch_config.yaml" />
+  <node name="haptic_board_detection" pkg="task_board_localization" type="haptic_board_detection" output="screen"/>
 </launch>
