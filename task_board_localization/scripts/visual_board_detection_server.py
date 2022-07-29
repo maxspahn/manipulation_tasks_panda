@@ -188,8 +188,6 @@ def point_server():
 
 if __name__=="__main__":
     rospy.init_node("point_server")
-    print("check")
-    dir_name = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models/')
-    #point_server()
+    point_server()
     print("point server started")
     rospy.spin()
