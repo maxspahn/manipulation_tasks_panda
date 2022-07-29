@@ -6,7 +6,7 @@ import math
 import numpy as np
 import quaternion # pip install numpy-quaternion
 import time
-import pathlib
+import rospkg
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped, Pose, WrenchStamped
 from std_msgs.msg import Float32MultiArray, Float32
@@ -17,6 +17,7 @@ from scipy.signal import savgol_filter
 
 class Learning_from_Demonstration():
     def __init__(self):
+        rospy.init_node("learning_node")
         self.r=rospy.Rate(100)
         self.pose = Pose()
         self.K_pos=1000
@@ -50,8 +51,12 @@ class Learning_from_Demonstration():
         self.spiral = False
         self.spiraling = False
         self.pose_ref_to_new = PoseStamped()
+        ros_pack = rospkg.RosPack()
+        self._package_path = ros_pack.get_path('trajectory_manager')
+        rospy.sleep()
 
     def _on_press(self, key):
+        rospy.loginfo(f"Event happened, user pressed {key}")
         # This function runs on the background and checks if a keyboard key was pressed
         if key == KeyCode.from_char('e'):
             self.end = True
@@ -175,6 +180,22 @@ class Learning_from_Demonstration():
 
             self.r.sleep()
 
+        goal = PoseStamped()
+        goal.header.seq = 1
+        goal.header.stamp = rospy.Time.now()
+        goal.header.frame_id = "map"
+
+        goal.pose.position.x = self.curr_pos[0]
+        goal.pose.position.y = self.curr_pos[1]
+        goal.pose.position.z = self.curr_pos[2]
+        
+        goal.pose.orientation.w = self.curr_ori[0]
+        goal.pose.orientation.x = self.curr_ori[1]
+        goal.pose.orientation.y = self.curr_ori[2]
+        goal.pose.orientation.z = self.curr_ori[3]
+        self.goal_pub.publish(goal)
+        self.set_stiffness(100, 100, 100, 5, 5, 5, 0)
+        rospy.loginfo("Ending trajectory recording")
         self.recorded_traj = savgol_filter(self.recorded_traj, 51, 3)
         self.recorded_ori = savgol_filter(self.recorded_ori, 51, 3)
 
@@ -345,13 +366,13 @@ class Learning_from_Demonstration():
             self.recorded_ori[3][i] = new_ori.z
 
     def save(self, file='last'):
-        np.savez(str(pathlib.Path().resolve()) + '/data/' + str(file) + '.npz',
+        np.savez(self._package_path + '/trajectories/' + str(file) + '.npz',
                  traj=self.recorded_traj,
                  ori=self.recorded_ori,
                  grip=self.recorded_gripper)
 
     def load(self, file='last'):
-        data = np.load(str(pathlib.Path().resolve()) + '/data/' + str(file) + '.npz')
+        data = np.load(self._package_path + '/trajectories/' + str(file) + '.npz')
         self.recorded_traj = data['traj']
         self.recorded_ori = data['ori']
         self.recorded_gripper = data['grip']
