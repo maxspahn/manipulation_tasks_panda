@@ -39,8 +39,8 @@ def pose_st_2_transformation(pose_st: PoseStamped):
     transformation_matrix = pose_2_transformation(pose_st.pose)
     return transformation_matrix
 
-def transform_pose(pose, transformation_matrix):
-    pose_as_matrix = pose_2_transformation(pose)
+def transform_pose(pose: PoseStamped, transformation_matrix):
+    pose_as_matrix = pose_st_2_transformation(pose)
     transformed_pose_matrix = transformation_matrix @ pose_as_matrix
     transformed_pose = transformation_2_pose(transformed_pose_matrix)
     return transformed_pose
