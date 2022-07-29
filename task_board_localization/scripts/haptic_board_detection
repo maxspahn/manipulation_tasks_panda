@@ -17,7 +17,8 @@ import math
 import dynamic_reconfigure.client
 from pyquaternion import Quaternion
 from sympy import Point, Line
-from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose
+from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose
+
 class BoardDetector():
     '''
     a wrapper class for board detection
@@ -66,7 +67,8 @@ class BoardDetector():
         self.rot_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
 
         self.pose_icp = PoseStamped()
-        self.pose_icp.pose.orientation.w = 1
+        self.pose_icp.pose.orientation.w = 0.707
+        self.pose_icp.pose.orientation.z = -0.707
         self.pose_box = PoseStamped()
 
     def set_stiffness(self, k_t1, k_t2, k_t3, k_r1, k_r2, k_r3, k_ns):
@@ -158,12 +160,12 @@ class BoardDetector():
         if offline:
             file_suffix = "ref"
             pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
-            transform = pose_2_transformation(pose_box_ref_guess)
+            transform = pose_st_2_transformation(pose_box_ref_guess)
         else:
             file_suffix = "new"
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
-            transform_cam = pose_2_transformation(pose_cam)
-            transform_icp = pose_2_transformation(self.pose_icp)
+            transform_cam = pose_st_2_transformation(pose_cam)
+            transform_icp = pose_st_2_transformation(self.pose_icp)
             transform_ref = np.load("transform_box_ref.npy")
             transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
 
@@ -179,7 +181,7 @@ class BoardDetector():
         np.save(f"coll_oris_{file_suffix}", self.coll_oris_to_save)
         self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
                                                        self.coll_points_to_save[1], self.coll_oris_to_save[1])
-        transform_box = pose_2_transformation(self.pose_box)
+        transform_box = pose_st_2_transformation(self.pose_box)
         np.save(f"transform_box_{file_suffix}", transform_box)
 
         return
@@ -313,7 +315,7 @@ if __name__ == '__main__':
     print('box pose is\n', detector.pose_box)
 
     transform_ref = np.load("transform_box_ref.npy")
-    transform_new = pose_2_transformation(detector.pose_box)
+    transform_new = pose_st_2_transformation(detector.pose_box)
     transform_ref_2_new = transform_new @ np.linalg.inv(transform_ref)
     detector.pose_ref_2_new = transformation_2_pose(transform_ref_2_new)
 
