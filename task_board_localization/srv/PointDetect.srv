@@ -1,4 +1,4 @@
 sensor_msgs/PointCloud2 cloud
-boolean success
+bool success
 ---
 geometry_msgs/PoseStamped pose
