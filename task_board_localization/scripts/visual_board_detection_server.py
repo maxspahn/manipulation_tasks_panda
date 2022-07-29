@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import rospy
 import actionlib
@@ -9,6 +9,7 @@ import open3d as o3d
 import numpy as np
 import copy
 import ros_numpy
+import os 
 from geometry_msgs.msg import Pose
 
 import sys
@@ -54,7 +55,7 @@ def preprocess_point_cloud(pcd, voxel_size):
     
     return pcd_down, pcd_fpfh
 
-def prepare_dataset(voxel_size, target):
+def prepare_dataset(voxel_size, target, new_source=False):
     '''
     read the point cloud data and crop the table plane
     @param voxel_size: voxel size for processing step
@@ -62,7 +63,9 @@ def prepare_dataset(voxel_size, target):
     @return: raw and processed point clouds
     '''
     print(":: Load two point clouds and disturb initial pose.")
-    source = o3d.io.read_point_cloud("/task_board_localization/scripts/final1.ply")
+    file_name = str("final1.ply")
+    dir_name = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models/')
+    source = o3d.io.read_point_cloud(dirname + file_name)
     model_numpy = ros_numpy.numpify(target)
 
     xyz = [(x, y, z) for x, y, z, rgb in model_numpy]  # (why cannot put this line below rgb?)
@@ -85,11 +88,13 @@ def prepare_dataset(voxel_size, target):
     target = pcd.crop(box)
     source = source.crop(box)
 
-    # o3d.io.write_point_cloud("/task_board_localization/scripts/final1.ply", target)
-    # pcd_load = o3d.io.read_point_cloud("target.ply")
-    # trans_init = np.asarray([[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
-    #                          [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]])
-    # source.transform(trans_init)
+    if new_source: 
+        o3d.io.write_point_cloud(dir_name + file_name, target)
+        pcd_load = o3d.io.read_point_cloud("target.ply")
+        trans_init = np.asarray([[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
+    	                         [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]])
+        source.transform(trans_init)
+    
     draw_registration_result(source, target, np.identity(4))
 
     source_down, source_fpfh = preprocess_point_cloud(source, voxel_size)
@@ -183,6 +188,8 @@ def point_server():
 
 if __name__=="__main__":
     rospy.init_node("point_server")
-    point_server()
+    print("check")
+    dir_name = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models/')
+    #point_server()
     print("point server started")
     rospy.spin()
