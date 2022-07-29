@@ -53,6 +53,7 @@ class Learning_from_Demonstration():
         self.pose_ref_to_new = PoseStamped()
         ros_pack = rospkg.RosPack()
         self._package_path = ros_pack.get_path('trajectory_manager')
+        rospy.sleep()
 
     def _on_press(self, key):
         rospy.loginfo(f"Event happened, user pressed {key}")
