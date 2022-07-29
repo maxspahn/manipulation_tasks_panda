@@ -6,7 +6,6 @@ import math
 import numpy as np
 import quaternion # pip install numpy-quaternion
 import time
-import pathlib
 import rospkg
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import PoseStamped, Pose, WrenchStamped
