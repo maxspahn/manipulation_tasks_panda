@@ -65,7 +65,7 @@ def prepare_dataset(voxel_size, target, new_source=False):
     print(":: Load two point clouds and disturb initial pose.")
     file_name = str("final1.ply")
     dir_name = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models/')
-    source = o3d.io.read_point_cloud(dirname + file_name)
+    source = o3d.io.read_point_cloud(dir_name + file_name)
     model_numpy = ros_numpy.numpify(target)
 
     xyz = [(x, y, z) for x, y, z, rgb in model_numpy]  # (why cannot put this line below rgb?)
