@@ -23,10 +23,10 @@ def point_detect_client():
 
         # Send point cloud the server
         rospy.wait_for_service("/point_detect",5)
-        orientation = point_detect(point_cloud)
+        posestamp = point_detect(point_cloud)
         rospy.loginfo("retrieved iterative closest point")
         rate.sleep()
-        return PointDetectResponse(orientation)
+        return PointDetectResponse(posestamp)
     except rospy.ServiceException as e:
         print("Service call failed")
     return

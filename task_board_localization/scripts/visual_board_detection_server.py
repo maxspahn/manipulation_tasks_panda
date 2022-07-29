@@ -10,7 +10,7 @@ import numpy as np
 import copy
 import ros_numpy
 import os 
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, PoseStamped
 
 import sys
 sys.path.append("../../")
@@ -169,16 +169,17 @@ def point_detect(req):
 
     # Store the created homogeneous matrix as a Pose message
     detected_quat = quaternion.from_rotation_matrix(rot_matrix)
-    detected_pose = Pose()
-    detected_pose.position.x = translation[0]
-    detected_pose.position.y = translation[1]
-    detected_pose.position.z = translation[2]
-    detected_pose.orientation.w = detected_quat.w
-    detected_pose.orientation.x = detected_quat.x
-    detected_pose.orientation.y = detected_quat.y
-    detected_pose.orientation.z = detected_quat.z
-
-    return PointDetectResponse(detected_pose)
+    posestamp = PoseStamped()
+    pose = Pose()
+    pose.position.x = translation[0]
+    pose.position.y = translation[1]
+    pose.position.z = translation[2]
+    pose.orientation.w = detected_quat.w
+    pose.orientation.x = detected_quat.x
+    pose.orientation.y = detected_quat.y
+    pose.orientation.z = detected_quat.z
+    posestamp.pose = pose
+    return PointDetectResponse(posestamp)
     
 def point_server():
     '''
