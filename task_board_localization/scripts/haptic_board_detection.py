@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 '''
 @Author: Stan Zwinkels, Xinjie (Richard) Liu
 @Date: 2022-4-25 16:46:30
