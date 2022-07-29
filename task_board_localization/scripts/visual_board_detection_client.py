@@ -32,11 +32,11 @@ def point_detect_client(record):
 
 if __name__ == "__main__":
     rospy.init_node("point_client")
-    record = True
+    record = False
     resp: PointDetectResponse = point_detect_client(record)
     trans_rot_pub = rospy.Publisher("/trans_rot", Pose, queue_size=0)
     while not rospy.is_shutdown():
-        trans_rot_pub.publish(resp.pose.pose)
+        trans_rot_pub.publish(resp.pose.pose.pose)
     print(resp)
     rospy.spin()
 

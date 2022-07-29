@@ -3,18 +3,18 @@
 import rospy
 import actionlib
 import roslib
+import rospkg
 import time
 import quaternion
 import open3d as o3d
 import numpy as np
 import copy
 import ros_numpy
-import os 
 from geometry_msgs.msg import Pose, PoseStamped
 
-import sys
-sys.path.append("../../")
 from task_board_localization.srv import PointDetect, PointDetectRequest, PointDetectResponse
+
+debug = True
 
 def draw_registration_result(source, target, transformation):
     '''
@@ -24,6 +24,8 @@ def draw_registration_result(source, target, transformation):
     @param transformation: transformation from global registration
     @return: an image showing the results
     '''
+    if not debug:
+        return
     source_temp = copy.deepcopy(source)
     target_temp = copy.deepcopy(target)
     source_temp.paint_uniform_color([1, 0.706, 0])
@@ -44,7 +46,8 @@ def preprocess_point_cloud(pcd, voxel_size):
     radius_normal = voxel_size #* 2
     print(":: Estimate normal with search radius %.3f." % radius_normal)
     pcd_down.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=100))
-    o3d.visualization.draw_geometries([pcd_down],point_show_normal=True)
+    if debug:
+        o3d.visualization.draw_geometries([pcd_down],point_show_normal=True)
     radius_feature = voxel_size #* 5
     print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
     pcd_fpfh = o3d.pipelines.registration.compute_fpfh_feature(pcd_down, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
@@ -59,9 +62,13 @@ def prepare_dataset(voxel_size, target, new_source=False):
     @return: raw and processed point clouds
     '''
     print(":: Load source point clouds.")
-    file_name = str("final1.ply")
-    dir_name = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models/')
-    source = o3d.io.read_point_cloud(dir_name + file_name)
+    ros_pack = rospkg.RosPack()
+    package_path = ros_pack.get_path('task_board_localization')
+    file_name = "reference_box_point_cloud.ply" # Should be a parameter
+    abs_file_name = package_path +'/models/' + file_name
+
+
+    source = o3d.io.read_point_cloud(abs_file_name)
     model_numpy = ros_numpy.numpify(target)
 
     xyz = [(x, y, z) for x, y, z, rgb in model_numpy]  
@@ -85,7 +92,7 @@ def prepare_dataset(voxel_size, target, new_source=False):
 
     # Overwrite the current pointcloud file
     if new_source: 
-        o3d.io.write_point_cloud(dir_name + file_name, target)
+        o3d.io.write_point_cloud(abs_file_name, target)
         pcd_load = o3d.io.read_point_cloud("target.ply")
         trans_init = np.asarray([[0.0, 0.0, 1.0, 0.0], [1.0, 0.0, 0.0, 0.0],
     	                         [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 0.0, 1.0]])
@@ -151,7 +158,7 @@ def point_detect(req):
     @return: the transformation
     '''
     voxel_size = 0.008  # means 5cm for the dataset
-    source, target, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(voxel_size, req.cloud, req.succes)
+    source, target, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(voxel_size, req.cloud, req.success)
 
     result_ransac = execute_global_registration(source_down, target_down, source_fpfh, target_fpfh, voxel_size)
     draw_registration_result(source_down, target_down, result_ransac.transformation)
