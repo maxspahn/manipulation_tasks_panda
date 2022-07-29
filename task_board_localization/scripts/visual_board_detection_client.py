@@ -7,7 +7,7 @@ from task_board_localization.srv import PointDetect, PointDetectRequest, PointDe
 from geometry_msgs.msg import Pose
 from sensor_msgs.msg import PointCloud2
 
-def point_detect_client():
+def point_detect_client(record):
     '''
     running of the perception service client
     @return:
@@ -23,7 +23,7 @@ def point_detect_client():
 
         # Send point cloud the server
         rospy.wait_for_service("/point_detect",5)
-        posestamp = point_detect(point_cloud)
+        posestamp = point_detect(point_cloud, record)
         rospy.loginfo("retrieved iterative closest point")
         rate.sleep()
         return PointDetectResponse(posestamp)
@@ -34,8 +34,8 @@ def point_detect_client():
 
 if __name__ == "__main__":
     rospy.init_node("point_client")
-
-    resp = point_detect_client()
+    record = True
+    resp = point_detect_client(record)
     trans_rot_pub = rospy.Publisher("/trans_rot", Pose, queue_size=0)
     while not rospy.is_shutdown():
         trans_rot_pub.publish(resp.pose.pose)

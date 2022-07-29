@@ -43,15 +43,11 @@ def preprocess_point_cloud(pcd, voxel_size):
 
     radius_normal = voxel_size #* 2
     print(":: Estimate normal with search radius %.3f." % radius_normal)
-    pcd_down.estimate_normals(
-        o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=100))
-    o3d.visualization.draw_geometries([pcd_down],
-                                  point_show_normal=True)
+    pcd_down.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=radius_normal, max_nn=100))
+    o3d.visualization.draw_geometries([pcd_down],point_show_normal=True)
     radius_feature = voxel_size #* 5
     print(":: Compute FPFH feature with search radius %.3f." % radius_feature)
-    pcd_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
-        pcd_down,
-        o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
+    pcd_fpfh = o3d.pipelines.registration.compute_fpfh_feature(pcd_down, o3d.geometry.KDTreeSearchParamHybrid(radius=radius_feature, max_nn=100))
     
     return pcd_down, pcd_fpfh
 
@@ -62,32 +58,32 @@ def prepare_dataset(voxel_size, target, new_source=False):
     @param target: target point cloud
     @return: raw and processed point clouds
     '''
-    print(":: Load two point clouds and disturb initial pose.")
+    print(":: Load source point clouds.")
     file_name = str("final1.ply")
     dir_name = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'models/')
     source = o3d.io.read_point_cloud(dir_name + file_name)
     model_numpy = ros_numpy.numpify(target)
 
-    xyz = [(x, y, z) for x, y, z, rgb in model_numpy]  # (why cannot put this line below rgb?)
-    # model_numpy = model_numpy.T
+    xyz = [(x, y, z) for x, y, z, rgb in model_numpy]  
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(np.array(xyz))
     draw_registration_result(source, pcd, np.identity(4))
 
-    # processing of the target pointcloud
-    # get the bounds of the initial point cloud
-    lb = pcd.get_min_bound() # (3,)
+    # processing of the target pointcloud via boundaries
+    lb = pcd.get_min_bound() 
     ub = pcd.get_max_bound()
     print("lower bounds of the un-processed pointcloud: ", lb)
-    print("lower bounds of the un-processed pointcloud: ", ub)
+    print("upper bounds of the un-processed pointcloud: ", ub)
+
     # cropping both source and target along z-axis
     ub[-1] = 0.45
-    min_bound = (lb)#np.array([0.1, 0.1, 0.1]).reshape([3, 1])
-    max_bound = (ub)#np.array([0.2, 0.2, 0.2]).reshape([3, 1])
+    min_bound = (lb)
+    max_bound = (ub)
     box = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
     target = pcd.crop(box)
     source = source.crop(box)
 
+    # Overwrite the current pointcloud file
     if new_source: 
         o3d.io.write_point_cloud(dir_name + file_name, target)
         pcd_load = o3d.io.read_point_cloud("target.ply")
@@ -103,8 +99,7 @@ def prepare_dataset(voxel_size, target, new_source=False):
     return source, target, source_down, target_down, source_fpfh, target_fpfh
 
 
-def execute_global_registration(source_down, target_down, source_fpfh,
-                                target_fpfh, voxel_size):
+def execute_global_registration(source_down, target_down, source_fpfh, target_fpfh, voxel_size):
     '''
     run RANSAC global registration step
     @param source_down: down-sampled source point cloud
@@ -127,7 +122,7 @@ def execute_global_registration(source_down, target_down, source_fpfh,
         ], criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(4000000, 0.9999999), mutual_filter=False)
     return result
 
-def refine_registration(source, target, source_fpfh, target_fpfh, voxel_size, result_ransac):
+def refine_registration(source, target, voxel_size, result_ransac):
     '''
     point-to-plane icp step
     @param source: source point cloud
@@ -156,18 +151,19 @@ def point_detect(req):
     @return: the transformation
     '''
     voxel_size = 0.008  # means 5cm for the dataset
-    source, target, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(voxel_size, req.cloud)
+    source, target, source_down, target_down, source_fpfh, target_fpfh = prepare_dataset(voxel_size, req.cloud, req.succes)
 
     result_ransac = execute_global_registration(source_down, target_down, source_fpfh, target_fpfh, voxel_size)
     draw_registration_result(source_down, target_down, result_ransac.transformation)
-    result_icp = refine_registration(source, target, source_fpfh, target_fpfh, voxel_size, result_ransac)
+    result_icp = refine_registration(source, target, voxel_size, result_ransac)
 
     trans = result_icp.transformation
     draw_registration_result(source, target, result_icp.transformation)
+
+   # Store the created homogeneous matrix as a PoseStamped message
     rot_matrix = trans[:3, :3]
     translation = trans[:, 3]
-
-    # Store the created homogeneous matrix as a Pose message
+    
     detected_quat = quaternion.from_rotation_matrix(rot_matrix)
     posestamp = PoseStamped()
     pose = Pose()
