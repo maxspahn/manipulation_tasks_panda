@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-import sys
+#!/usr/bin/env python3
 import rospy
 from task_board_localization.srv import PointDetect, PointDetectRequest, PointDetectResponse
 
@@ -35,11 +33,10 @@ def point_detect_client(record):
 if __name__ == "__main__":
     rospy.init_node("point_client")
     record = True
-    resp = point_detect_client(record)
+    resp: PointDetectResponse = point_detect_client(record)
     trans_rot_pub = rospy.Publisher("/trans_rot", Pose, queue_size=0)
     while not rospy.is_shutdown():
         trans_rot_pub.publish(resp.pose.pose)
-    print(resp)
     print(resp)
     rospy.spin()
 
