@@ -18,6 +18,7 @@ import dynamic_reconfigure.client
 from pyquaternion import Quaternion
 from sympy import Point, Line
 from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose
+import sys
 
 class BoardDetector():
     '''
@@ -26,23 +27,32 @@ class BoardDetector():
     def __init__(self):
         self.r = rospy.Rate(100)
 
-        self.force_threshold = 7
+        self.force_threshold = rospy.get_param('board_touch/force_threshold', '7')
+        self.board_width = rospy.get_param('board_touch/width', '0.16')
+        self.board_length = rospy.get_param('board_touch/length', '0.26')
+        self.board_height = rospy.get_param('board_touch/height', '0.07')
+        self.clearance = rospy.get_param('board_touch/clearance', '0.07')
+        self.K_pos = rospy.get_param('stiffness/K_pos', '600')
+        self.K_z = rospy.get_param('stiffness/K_z', '1000')
+        self.K_ori = rospy.get_param('stiffness/K_ori', '50')
+        self.trans_ref_guess = np.array(rospy.get_param('pose_box_ref_guess/trans_ref_guess', '[0.5, 0.1512, 0.16]'))
+        self.rot_ref_guess = np.quaternion(rospy.get_param('pose_box_ref_guess/rot_ref_guess', '[0.7148849557796, 0, 0, -0.699187185237258]'))
+        self.trans_cam = np.array(rospy.get_param('transform_cam/trans_cam', '[0.483, 0.021, 0.58]'))
+        self.rot_cam = np.quaternion(rospy.get_param('transform_cam/rot_cam', '[0.006, 0.734, -0.679, 0.006]'))
+        cartesian_pose_topic = rospy.get_param('cartesian_pose_topic_name', '/cartesian_pose')
+        force_torque_ext_topic = rospy.get_param('force_torque_ext_topic', '/force_torque_ext')
+        equilibrium_pose_topic = rospy.get_param('equilibrium_pose_topic', '/equilibrium_pose')
+        pose_ref_2_new_topic = rospy.get_param('pose_ref_2_new_topic', '/pose_ref_2_new')
 
-        self.sub = rospy.Subscriber('/cartesian_pose', PoseStamped, self.update_pose)
-        self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_checker)
+        self.sub = rospy.Subscriber(cartesian_pose_topic, PoseStamped, self.update_pose)
+        self.force_feedback_sub = rospy.Subscriber(force_torque_ext_topic, WrenchStamped, self.force_feedback_checker)
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
         self.transform_icp_sub = rospy.Subscriber('/trans_rot', PoseStamped, self.transform_icp_callback)
 
-        self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
-        self.pose_ref_2_new_pub = rospy.Publisher('/pose_ref_2_new', PoseStamped, queue_size=0)
+        self.goal_pub = rospy.Publisher(equilibrium_pose_topic, PoseStamped, queue_size=0)
+        self.pose_ref_2_new_pub = rospy.Publisher(pose_ref_2_new_topic, PoseStamped, queue_size=0)
 
         self.pose_ref_2_new = PoseStamped()
-        self.collided = False
-        self.board_width = 0.16
-        self.board_length = 0.26
-        self.board_height = 0.07
-        self.clearance = 0.07
-        self.detected = False
         self.force_feedback = None
         self.torque_z = None
         self.curr_pos = np.empty([3])
@@ -56,19 +66,9 @@ class BoardDetector():
         self.coll_points_to_save = []
         self.coll_oris = [np.array([[0, 0, 0, 0]])]
         self.coll_oris_to_save = []
-        self.K_pos = 600
-        self.K_z = 1000
-        self.K_ori = 50
-
-        self.trans_ref_guess = [0.5, 0.1512, 0.16]
-        self.rot_ref_guess = np.quaternion(np.sqrt(0.5), 0, 0, -np.sqrt(0.5)) * np.quaternion(0.9999, 0, 0, 0.0111)
-
-        self.trans_cam = np.array([0.483, 0.021, 0.58])
-        self.rot_cam = np.quaternion(0.006, 0.734, -0.679, 0.006)
 
         self.pose_icp = PoseStamped()
-        self.pose_icp.pose.orientation.w = 0.707
-        self.pose_icp.pose.orientation.z = -0.707
+        self.pose_icp.pose.orientation.w = 1
         self.pose_box = PoseStamped()
 
     def set_stiffness(self, k_t1, k_t2, k_t3, k_r1, k_r2, k_r3, k_ns):
@@ -96,15 +96,11 @@ class BoardDetector():
         self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
         if self.force_feedback > self.force_threshold:
             # print("force exceeded,current point is", self.curr_pos, self.curr_ori)
-            self.collided = True
             # print("current point ", self.curr_pos)
             self.coll_points.append(self.curr_pos)
             # print(self.coll_points, self.curr_pos)
             self.coll_oris.append(self.curr_ori)
             # print(self.coll_oris, self.curr_ori)
-            self.collided = False
-        else:
-            self.collided = False
 
     def transform_icp_callback(self, pose_icp):
         self.pose_icp = pose_icp
@@ -304,7 +300,10 @@ class BoardDetector():
         return pose
 
 if __name__ == '__main__':
-    offline = False
+    if sys.argv[1]:
+        offline = sys.argv[1]
+    else:
+        offline = True
     
     rospy.init_node('BoardDetector', anonymous=True)
     detector = BoardDetector()
