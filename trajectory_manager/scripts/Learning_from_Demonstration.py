@@ -15,7 +15,7 @@ from pynput.keyboard import Listener, KeyCode
 from scipy.signal import savgol_filter
 
 
-class Trajectory_Handler():
+class Learning_from_Demonstration():
     def __init__(self):
         self.r=rospy.Rate(100)
         self.pose = Pose()
