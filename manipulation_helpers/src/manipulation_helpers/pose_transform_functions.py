@@ -8,9 +8,9 @@ def orientation_2_quaternion(orientation):
 def position_2_array(position):
     return np.array([position.x, position.y, position.z])
 
-def pose_2_transformation(pose_st: PoseStamped):
-    quaternion_orientation = orientation_2_quaternion(pose_st.pose.orientation)
-    translation = position_2_array(pose_st.pose.position)
+def pose_2_transformation(pose: Pose):
+    quaternion_orientation = orientation_2_quaternion(pose.orientation)
+    translation = position_2_array(pose.position)
     rotation_matrix = quaternion.as_rotation_matrix(quaternion_orientation)
     transformation_matrix = np.identity(4)
     transformation_matrix[0:3, 0:3] = rotation_matrix
@@ -34,6 +34,10 @@ def transformation_2_pose(transformation_matrix):
     quat = quaternion.from_rotation_matrix(rotation_matrix)
     pose_st = array_quat_2_pose(pos_array, quat)
     return pose_st
+
+def pose_st_2_transformation(pose_st: PoseStamped):
+    transformation_matrix = pose_2_transformation(pose_st.pose)
+    return transformation_matrix
 
 def transform_pose(pose, transformation_matrix):
     pose_as_matrix = pose_2_transformation(pose)
