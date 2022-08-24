@@ -19,6 +19,7 @@ from pyquaternion import Quaternion
 from sympy import Point, Line
 from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 import sys
+import rospkg
 
 class BoardDetector():
     '''
@@ -26,7 +27,9 @@ class BoardDetector():
     '''
     def __init__(self):
         self.r = rospy.Rate(100)
-
+        self.rospack = rospkg.RosPack()
+	self.package_path = rospack.get_path("task_board_localization")
+	
         self.force_threshold = rospy.get_param('board_touch/force_threshold', 7)
         self.board_width = rospy.get_param('board_touch/width', 0.16)
         self.board_length = rospy.get_param('board_touch/length', 0.26)
@@ -150,19 +153,18 @@ class BoardDetector():
     
     def execute_touch(self, offline):
         self.get_trajectories()
+        self.transform_ref_filename = rospy.get_param("ref_box_pose_filename")
 
         # 'Offline' you manually input a guess of the box pose to then save an accurate pose from the touch (to have
         # the reference pose of the recordings), 'online' the perception is used to get the 'initial guess'
         if offline:
-            file_suffix = "ref"
             pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
             transform = pose_st_2_transformation(pose_box_ref_guess)
         else:
-            file_suffix = "new"
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
             transform_cam = pose_st_2_transformation(pose_cam)
             transform_icp = pose_st_2_transformation(self.pose_icp)
-            transform_ref = np.load("transform_box_ref.npy")
+            transform_ref = np.load(f"{self.package_path}/models/{ref_box_pose_filename}")
             transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
 
         poses_x_transformed = []
@@ -172,13 +174,15 @@ class BoardDetector():
         poses_y_transformed = []
         poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_y]
         self.execute_trajectory(poses_y_transformed)
-
-        np.save(f"coll_points_{file_suffix}", self.coll_points_to_save)
-        np.save(f"coll_oris_{file_suffix}", self.coll_oris_to_save)
+	
+	file_suffix = rospy.get_param("filenames_suffix")
+        np.save(f"{self.package_path}/models/coll_points_{file_suffix}", self.coll_points_to_save)
+        np.save(f"{self.package_path}/models/coll_oris_{file_suffix}", self.coll_oris_to_save)
         self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
                                                        self.coll_points_to_save[1], self.coll_oris_to_save[1])
         transform_box = pose_st_2_transformation(self.pose_box)
-        np.save(f"transform_box_{file_suffix}", transform_box)
+        np.save(f"{self.package_path}/models/transform_box_{file_suffix}", transform_box)
+
 
         return
 
@@ -312,7 +316,7 @@ if __name__ == '__main__':
     print('two collision poses are\n', detector.coll_points_to_save, detector.coll_oris_to_save)
     print('box pose is\n', detector.pose_box)
 
-    transform_ref = np.load("transform_box_ref.npy")
+    transform_ref = np.load(f"{self.package_path}/models/{ref_box_pose_filename}")
     transform_new = pose_st_2_transformation(detector.pose_box)
     transform_ref_2_new = transform_new @ np.linalg.inv(transform_ref)
     detector.pose_ref_2_new = transformation_2_pose(transform_ref_2_new)
