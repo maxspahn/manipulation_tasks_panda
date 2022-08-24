@@ -13,7 +13,7 @@ from std_msgs.msg import Float32MultiArray, Float32
 import dynamic_reconfigure.client
 from pynput.keyboard import Listener, KeyCode
 from scipy.signal import savgol_filter
-
+from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 
 class Learning_from_Demonstration():
     def __init__(self):
@@ -50,10 +50,10 @@ class Learning_from_Demonstration():
         self.listener.start()
         self.spiral = False
         self.spiraling = False
-        self.pose_ref_to_new = PoseStamped()
+        self.pose_ref_to_new = None
         ros_pack = rospkg.RosPack()
         self._package_path = ros_pack.get_path('trajectory_manager')
-        rospy.sleep()
+        rospy.sleep(1)
 
     def _on_press(self, key):
         rospy.loginfo(f"Event happened, user pressed {key}")
@@ -278,6 +278,10 @@ class Learning_from_Demonstration():
         start.pose.orientation.x = self.recorded_ori[1][0]
         start.pose.orientation.y = self.recorded_ori[2][0]
         start.pose.orientation.z = self.recorded_ori[3][0]
+        
+        if self.pose_ref_to_new:
+        	transform = pose_st_2_transformation(self.pose_ref_to_new)
+	    	start = transform_pose(start, transform)
         self.go_to_pose(start)
 
         for i in range (self.recorded_traj.shape[1]):
@@ -295,7 +299,10 @@ class Learning_from_Demonstration():
             goal.pose.orientation.x = self.recorded_ori[1][i]
             goal.pose.orientation.y = self.recorded_ori[2][i]
             goal.pose.orientation.z = self.recorded_ori[3][i]
-
+            
+            if self.pose_ref_to_new:
+            	goal = transform_pose(goal, transform)
+            
             if self.spiral:
                 self.perf_spiral(goal)
 
@@ -333,7 +340,7 @@ class Learning_from_Demonstration():
             if i == self.recorded_traj.shape[1]-1:
                 break
 
-    def transform_trajectory(self):
+    def transform_trajectory(self, transform):
         # rospy.sleep(1)
         transf_pose = self.pose_ref_to_new
 
