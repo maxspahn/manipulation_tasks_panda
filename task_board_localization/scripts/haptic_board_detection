@@ -28,7 +28,7 @@ class BoardDetector():
     def __init__(self):
         self.r = rospy.Rate(100)
         self.rospack = rospkg.RosPack()
-	self.package_path = rospack.get_path("task_board_localization")
+        self.package_path = self.rospack.get_path("task_board_localization")
 	
         self.force_threshold = rospy.get_param('board_touch/force_threshold', 7)
         self.board_width = rospy.get_param('board_touch/width', 0.16)
@@ -164,7 +164,7 @@ class BoardDetector():
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
             transform_cam = pose_st_2_transformation(pose_cam)
             transform_icp = pose_st_2_transformation(self.pose_icp)
-            transform_ref = np.load(f"{self.package_path}/models/{ref_box_pose_filename}")
+            transform_ref = np.load(f"{self.package_path}/models/{self.transform_ref_filename}")
             transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
 
         poses_x_transformed = []
@@ -174,8 +174,8 @@ class BoardDetector():
         poses_y_transformed = []
         poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_y]
         self.execute_trajectory(poses_y_transformed)
-	
-	file_suffix = rospy.get_param("filenames_suffix")
+        
+        file_suffix = rospy.get_param("filenames_suffix")
         np.save(f"{self.package_path}/models/coll_points_{file_suffix}", self.coll_points_to_save)
         np.save(f"{self.package_path}/models/coll_oris_{file_suffix}", self.coll_oris_to_save)
         self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
@@ -316,7 +316,7 @@ if __name__ == '__main__':
     print('two collision poses are\n', detector.coll_points_to_save, detector.coll_oris_to_save)
     print('box pose is\n', detector.pose_box)
 
-    transform_ref = np.load(f"{self.package_path}/models/{ref_box_pose_filename}")
+    transform_ref = np.load(f"{detector.package_path}/models/{detector.transform_ref_filename}")
     transform_new = pose_st_2_transformation(detector.pose_box)
     transform_ref_2_new = transform_new @ np.linalg.inv(transform_ref)
     detector.pose_ref_2_new = transformation_2_pose(transform_ref_2_new)
