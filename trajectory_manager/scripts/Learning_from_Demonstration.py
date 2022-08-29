@@ -13,7 +13,7 @@ from std_msgs.msg import Float32MultiArray, Float32
 import dynamic_reconfigure.client
 from pynput.keyboard import Listener, KeyCode
 from scipy.signal import savgol_filter
-
+from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 
 class Learning_from_Demonstration():
     def __init__(self):
@@ -37,9 +37,12 @@ class Learning_from_Demonstration():
         self.recorded_gripper= None
         self.end=False
         self.grip_value=1
+        
+        pose_ref_2_new_topic = rospy.get_param('pose_ref_2_new_topic', '/pose_ref_2_new')
+        
         self.pos_sub=rospy.Subscriber("/cartesian_pose", PoseStamped, self.ee_pos_callback) ##### are the subs being used?
         self.gripper_sub=rospy.Subscriber("/joint_states", JointState, self.gripper_callback)
-        self.pose_ref_to_new_sub = rospy.Subscriber('/pose_ref_to_new', PoseStamped, self.pose_ref_to_new_callback)
+        self.pose_ref_2_new_sub = rospy.Subscriber(pose_ref_2_new_topic, PoseStamped, self.pose_ref_2_new_callback)
         self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_callback)
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
         self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
@@ -50,10 +53,10 @@ class Learning_from_Demonstration():
         self.listener.start()
         self.spiral = False
         self.spiraling = False
-        self.pose_ref_to_new = PoseStamped()
+        self.pose_ref_2_new = None
         ros_pack = rospkg.RosPack()
         self._package_path = ros_pack.get_path('trajectory_manager')
-        rospy.sleep()
+        rospy.sleep(1)
 
     def _on_press(self, key):
         rospy.loginfo(f"Event happened, user pressed {key}")
@@ -98,8 +101,8 @@ class Learning_from_Demonstration():
         self.curr_pos = np.array([curr_conf.pose.position.x, curr_conf.pose.position.y, curr_conf.pose.position.z])
         self.curr_ori = np.array([curr_conf.pose.orientation.w, curr_conf.pose.orientation.x, curr_conf.pose.orientation.y, curr_conf.pose.orientation.z])
 
-    def pose_ref_to_new_callback(self, pose_ref_to_new):
-        self.pose_ref_to_new = pose_ref_to_new
+    def pose_ref_2_new_callback(self, pose_ref_2_new):
+        self.pose_ref_2_new = pose_ref_2_new
 
     ######## Not currently being used, can be used to specify certain width which the gripper needs to maintain
     def gripper_callback(self, curr_width):
@@ -278,6 +281,10 @@ class Learning_from_Demonstration():
         start.pose.orientation.x = self.recorded_ori[1][0]
         start.pose.orientation.y = self.recorded_ori[2][0]
         start.pose.orientation.z = self.recorded_ori[3][0]
+        
+        if self.pose_ref_2_new:
+        	transform = pose_st_2_transformation(self.pose_ref_2_new)
+        	start = transform_pose(start, transform)
         self.go_to_pose(start)
 
         for i in range (self.recorded_traj.shape[1]):
@@ -295,7 +302,10 @@ class Learning_from_Demonstration():
             goal.pose.orientation.x = self.recorded_ori[1][i]
             goal.pose.orientation.y = self.recorded_ori[2][i]
             goal.pose.orientation.z = self.recorded_ori[3][i]
-
+            
+            if self.pose_ref_2_new:
+            	goal = transform_pose(goal, transform)
+            
             if self.spiral:
                 self.perf_spiral(goal)
 
@@ -333,9 +343,9 @@ class Learning_from_Demonstration():
             if i == self.recorded_traj.shape[1]-1:
                 break
 
-    def transform_trajectory(self):
+    def transform_trajectory(self, transform):
         # rospy.sleep(1)
-        transf_pose = self.pose_ref_to_new
+        transf_pose = self.pose_ref_2_new
 
         trans = np.array([transf_pose.pose.position.x, transf_pose.pose.position.y, transf_pose.pose.position.z])
         quat_ref_to_new = np.quaternion(transf_pose.pose.orientation.w, transf_pose.pose.orientation.x,
