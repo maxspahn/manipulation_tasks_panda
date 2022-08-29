@@ -30,12 +30,12 @@ class BoardDetector():
         self.rospack = rospkg.RosPack()
         self.package_path = self.rospack.get_path("task_board_localization")
 	
-        self.force_threshold = rospy.get_param('board_touch/force_threshold', 7)
+        self.force_threshold = rospy.get_param('board_touch/force_threshold', 15)
         self.board_width = rospy.get_param('board_touch/width', 0.16)
         self.board_length = rospy.get_param('board_touch/length', 0.26)
         self.board_height = rospy.get_param('board_touch/height', 0.07)
         self.clearance = rospy.get_param('board_touch/clearance', 0.07)
-        self.K_pos = rospy.get_param('stiffness/K_pos', 600)
+        self.K_pos = rospy.get_param('stiffness/K_pos', 400)
         self.K_z = rospy.get_param('stiffness/K_z', 1000)
         self.K_ori = rospy.get_param('stiffness/K_ori', 50)
         self.trans_ref_guess = np.array(rospy.get_param('pose_box_ref_guess/trans_ref_guess', '[0.5, 0.1512, 0.16]'))
@@ -98,7 +98,7 @@ class BoardDetector():
         self.torque_z = torque.z
         self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
         if self.force_feedback > self.force_threshold:
-            # print("force exceeded,current point is", self.curr_pos, self.curr_ori)
+            print("force exceeded,current force norm is", self.force_feedback)
             # print("current point ", self.curr_pos)
             self.coll_points.append(self.curr_pos)
             # print(self.coll_points, self.curr_pos)
@@ -120,20 +120,22 @@ class BoardDetector():
         # I'm assuming we are putting the coordinate systems in a corner,
         # and that x-axis goes along length and y along width
 
-        # Point outside and above box
-        p1x = [-self.clearance, self.board_width/2, self.clearance]
-        p2x = [p1x[0], p1x[1], -self.board_height*0.6]
-        p3x = [self.board_width/2, p2x[1], p2x[2]]
+        
+        p1x = [-self.clearance, self.board_width*0.6, self.clearance] # Point outside and above box
+        p2x = [p1x[0], p1x[1], -self.board_height*0.6] # Point right outside but "on level" vertically with box
+        p3x = [self.board_width/2, p2x[1], p2x[2]] # Point inside box (so for collision) 
+        p4x = [p3x[0], self.board_width*0.1, p3x[2]] # Point to the side of previous point, to 'feel' the wall 
 
-        self.points_x = [p1x, p2x, p3x]
+        self.points_x = [p1x, p2x, p3x, p4x]
         self.poses_x = []
         self.poses_x[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
 
-        p1y = [self.board_length*0.7, -self.clearance, self.clearance]
+        p1y = [self.board_length*0.75, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.7]
         p3y = [p2y[0], self.board_width * 0.35, p2y[2]]
+        p4y = [self.board_length*0.55, p3y[1], p3y[2]]
 
-        self.points_y = [p1y, p2y, p3y]
+        self.points_y = [p1y, p2y, p3y, p4y]
         self.poses_y = []
         self.poses_y[:] = [array_quat_2_pose(point_y, self.ori_y) for point_y in self.points_y]
 
@@ -141,13 +143,13 @@ class BoardDetector():
 
     def execute_trajectory(self, poses):
         for pose in poses:
-            if pose == poses[-1]: self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
+            if pose == poses[-1] or pose == poses[-2]: self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
             self.go_to_pose(pose)
 
-        self.coll_points_to_save.append(self.coll_points[-1])
-        self.coll_oris_to_save.append(self.coll_oris[-1])
+        self.coll_points_to_save.append(self.coll_points[-20])
+        self.coll_oris_to_save.append(self.coll_oris[-20])
 
         self.go_to_pose(poses[0])
     
