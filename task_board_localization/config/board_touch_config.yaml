@@ -4,7 +4,7 @@ board_touch:
     length: 0.26
     height: 0.07
   clearance: 0.07
-  force_threshold: 15
+  force_threshold: 20
 
 stiffness:
   K_pos: 400
