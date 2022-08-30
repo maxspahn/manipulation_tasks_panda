@@ -20,6 +20,7 @@ from sympy import Point, Line
 from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 import sys
 import rospkg
+import pdb
 
 class BoardDetector():
     '''
@@ -65,10 +66,12 @@ class BoardDetector():
         self.trajz = []
         self.ori_x = np.quaternion(1, 0, 0, 0)
         self.ori_y = np.quaternion(1, 0, 0, 0)
-        self.coll_points = [np.array([[0, 0, 0]])]
-        self.coll_points_to_save = []
-        self.coll_oris = [np.array([[0, 0, 0, 0]])]
-        self.coll_oris_to_save = []
+        self.coll_points = [np.array([0, 0, 0])]
+        self.coll_points_x = []
+        self.coll_points_y = []
+        self.coll_oris = [np.array([0, 0, 0, 0])]
+        self.coll_oris_x = []
+        self.coll_oris_y = []
 
         self.pose_icp = PoseStamped()
         self.pose_icp.pose.orientation.w = 1
@@ -98,7 +101,7 @@ class BoardDetector():
         self.torque_z = torque.z
         self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
         if self.force_feedback > self.force_threshold:
-            print("force exceeded,current force norm is", self.force_feedback)
+            # print("force exceeded,current force norm is", self.force_feedback)
             # print("current point ", self.curr_pos)
             self.coll_points.append(self.curr_pos)
             # print(self.coll_points, self.curr_pos)
@@ -147,11 +150,6 @@ class BoardDetector():
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori, 0.0)
 
             self.go_to_pose(pose)
-
-        self.coll_points_to_save.append(self.coll_points[-20])
-        self.coll_oris_to_save.append(self.coll_oris[-20])
-
-        self.go_to_pose(poses[0])
     
     def execute_touch(self, offline):
         self.get_trajectories()
@@ -172,16 +170,36 @@ class BoardDetector():
         poses_x_transformed = []
         poses_x_transformed[:] = [transform_pose(pose_x, transform) for pose_x in self.poses_x]
         self.execute_trajectory(poses_x_transformed)
-
+        
+        self.coll_points_x = self.coll_points[1::10]
+        self.coll_oris_x = self.coll_oris[1::10]
+        
+        
+        self.go_to_pose(poses_x_transformed[0])
+        
+        file_suffix = rospy.get_param("filenames_suffix")
+        np.save(f"{self.package_path}/models/coll_points_x_{file_suffix}", self.coll_points_x)
+        np.save(f"{self.package_path}/models/coll_oris_x_{file_suffix}", self.coll_oris_x)
+        
+        self.coll_points = []
+        self.coll_oris = []
+        
         poses_y_transformed = []
         poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_y]
         self.execute_trajectory(poses_y_transformed)
         
-        file_suffix = rospy.get_param("filenames_suffix")
-        np.save(f"{self.package_path}/models/coll_points_{file_suffix}", self.coll_points_to_save)
-        np.save(f"{self.package_path}/models/coll_oris_{file_suffix}", self.coll_oris_to_save)
-        self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
-                                                       self.coll_points_to_save[1], self.coll_oris_to_save[1])
+        self.coll_points_y = self.coll_points[1::10]
+        self.coll_oris_y = self.coll_oris[1::10]
+        
+        self.go_to_pose(poses_y_transformed[0])
+        
+        pdb.set_trace()
+        
+        np.save(f"{self.package_path}/models/coll_points_y_{file_suffix}", self.coll_points_y)
+        np.save(f"{self.package_path}/models/coll_oris_y_{file_suffix}", self.coll_oris_y)
+        
+        self.pose_box = self.box_pose_from_2_points(self.coll_points_x[0], self.coll_oris_x[0],
+                                                       self.coll_points_y[0], self.coll_oris_y[0])
         transform_box = pose_st_2_transformation(self.pose_box)
         np.save(f"{self.package_path}/models/transform_box_{file_suffix}", transform_box)
 
