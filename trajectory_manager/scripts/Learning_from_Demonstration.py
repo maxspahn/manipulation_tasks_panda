@@ -310,7 +310,7 @@ class Learning_from_Demonstration():
                 self.perf_spiral(goal)
 
             if np.sum(self.feedback)!=0:
-                for j in range(max(0,i-self.correction_window),min(i+self.correction_window, self.recorded_traj.shape[1])):
+                for j in range(self.recorded_traj.shape[1]):
                     x = self.feedback[0]*self.square_exp(i, j)
                     y = self.feedback[1]*self.square_exp(i, j)
                     z = self.feedback[2]*self.square_exp(i, j)
