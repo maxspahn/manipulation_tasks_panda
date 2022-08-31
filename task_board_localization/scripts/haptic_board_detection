@@ -31,7 +31,7 @@ class BoardDetector():
         self.rospack = rospkg.RosPack()
         self.package_path = self.rospack.get_path("task_board_localization")
 	
-        self.force_threshold = rospy.get_param('board_touch/force_threshold', 20)
+        self.force_threshold = rospy.get_param('board_touch/force_threshold', 10)
         self.board_width = rospy.get_param('board_touch/width', 0.16)
         self.board_length = rospy.get_param('board_touch/length', 0.26)
         self.board_height = rospy.get_param('board_touch/height', 0.07)
@@ -100,7 +100,7 @@ class BoardDetector():
         force = feedback.wrench.force
         torque = feedback.wrench.torque
         self.torque_z = torque.z
-        self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
+        self.force_feedback = np.abs(force.x)
         if self.force_feedback > self.force_threshold and self.record:
             print('\a')
             # print("force exceeded,current force norm is", self.force_feedback)
