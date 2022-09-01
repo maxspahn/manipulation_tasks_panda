@@ -100,9 +100,9 @@ class BoardDetector():
         force = feedback.wrench.force
         torque = feedback.wrench.torque
         self.torque_z = torque.z
-        self.force_feedback = np.abs(force.x)
-        if self.force_feedback > self.force_threshold and self.record:
-            print('\a')
+        self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
+        if self.force_feedback > self.force_threshold:
+            # print('\a')
             # print("force exceeded,current force norm is", self.force_feedback)
             # print("current point ", self.curr_pos)
             self.coll_points.append(self.curr_pos)
@@ -126,10 +126,10 @@ class BoardDetector():
         # and that x-axis goes along length and y along width
 
         
-        p1x = [-self.clearance, self.board_width*0.6, self.clearance] # Point outside and above box
+        p1x = [-self.clearance, self.board_width*0.65, self.clearance] # Point outside and above box
         p2x = [p1x[0], p1x[1], -self.board_height*0.6] # Point right outside but "on level" vertically with box
         p3x = [self.board_width/2, p2x[1], p2x[2]] # Point inside box (so for collision) 
-        p4x = [p3x[0], self.board_width*0.05, p3x[2]] # Point to the side of previous point, to 'feel' the wall 
+        p4x = [p3x[0], self.board_width*0.25, p3x[2]] # Point to the side of previous point, to 'feel' the wall 
 
         self.points_x = [p1x, p2x, p3x, p4x]
         self.poses_x = []
@@ -177,7 +177,6 @@ class BoardDetector():
         
         self.coll_points_x = self.coll_points
         self.coll_oris_x = self.coll_oris
-        
         
         self.go_to_pose(poses_x_transformed[0])
         
@@ -335,12 +334,15 @@ class BoardDetector():
         return x_coords, y_coords, m_new, c_new
 
     def box_pose_from_collision_array(self, coll_points_x_axis, coll_points_y_axis):
+        coll_points_x_axis = np.array(coll_points_x_axis)
+        coll_points_y_axis = np.array(coll_points_y_axis)
+
         coll_points_x_axis = coll_points_x_axis[1:]  # First point is just 0,0,0
 
         # Dropping the z-coordinates
         coll_points_x_axis = coll_points_x_axis[:, :2]
         coll_points_y_axis = coll_points_y_axis[:, :2]
-
+        
         x_coords_x_axis = coll_points_x_axis[:, 0]
         y_coords_x_axis = coll_points_x_axis[:, 1]
 
@@ -350,15 +352,18 @@ class BoardDetector():
         x_coords_x_axis, y_coords_x_axis, x_axis_m, x_axis_c = self.filter_and_regress_coll_points(x_coords_x_axis, y_coords_x_axis, 0.9)
         x_coords_y_axis, y_coords_y_axis, y_axis_m, y_axis_c = self.filter_and_regress_coll_points(x_coords_y_axis, y_coords_y_axis, 0.9)
 
-        a = np.array([[x_axis_m, 1], [y_axis_m, 1]])
+        a = np.array([[-x_axis_m, 1], [-y_axis_m, 1]])
         b = np.array([x_axis_c, y_axis_c])
         intersection = np.linalg.solve(a, b)
 
         delta_y = (x_coords_x_axis[-1] * x_axis_m + x_axis_c) - (x_coords_x_axis[0] * x_axis_m + x_axis_c)
 
-        x_axis_angle = np.arctan2(delta_y, x_coords_x_axis[-1] - x_coords_x_axis[0])
+        x_axis_angle = np.arctan2(delta_y, x_coords_x_axis[-1] - x_coords_x_axis[0]) - np.pi / 2
         orientation = quaternion.from_euler_angles(np.array([0, 0, x_axis_angle]))
-
+        print("box angle ", np.degrees(x_axis_angle))
+        angle_between_lines = np.arctan((x_axis_m - y_axis_m)/(1 + x_axis_m * y_axis_m))
+        print("angle between lines ", angle_between_lines)
+        
         pose_box = array_quat_2_pose(np.array([intersection[0], intersection[1], 0.1]), orientation)
         return pose_box
 
@@ -372,7 +377,6 @@ if __name__ == '__main__':
     time.sleep(1)
     # Add line with request to the pointcloud server to fill out pose_icp
     detector.execute_touch(offline)
-    print('two collision poses are\n', detector.coll_points_to_save, detector.coll_oris_to_save)
     print('box pose is\n', detector.pose_box)
 
     transform_ref = np.load(f"{detector.package_path}/models/{detector.transform_ref_filename}")
