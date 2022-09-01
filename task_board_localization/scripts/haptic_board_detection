@@ -196,13 +196,11 @@ class BoardDetector():
         self.coll_oris_y = self.coll_oris
         
         self.go_to_pose(poses_y_transformed[0])
-        
-        
+
         np.save(f"{self.package_path}/models/coll_points_y_{file_suffix}", self.coll_points_y)
         np.save(f"{self.package_path}/models/coll_oris_y_{file_suffix}", self.coll_oris_y)
         
-        self.pose_box = self.box_pose_from_2_points(self.coll_points_x[0], self.coll_oris_x[0],
-                                                       self.coll_points_y[0], self.coll_oris_y[0])
+        self.pose_box = self.box_pose_from_collision_array(self.coll_points_x, self.coll_points_y)
         transform_box = pose_st_2_transformation(self.pose_box)
         np.save(f"{self.package_path}/models/transform_box_{file_suffix}", transform_box)
 
@@ -325,6 +323,44 @@ class BoardDetector():
         pose.pose.orientation.z = ori.z
         
         return pose
+
+    def filter_and_regress_coll_points(self, x_coords, y_coords, frac_points_to_keep):
+        m_init, c_init = np.polyfit(x_coords, y_coords, 1)
+        pred = m_init * x_coords + c_init
+        score_array = (y_coords - pred) ** 2
+        top_idx = np.argsort(score_array)[:int(len(x_coords) * frac_points_to_keep)]
+        x_coords = x_coords[top_idx]
+        y_coords = y_coords[top_idx]
+        m_new, c_new = np.polyfit(x_coords, y_coords, 1)
+        return x_coords, y_coords, m_new, c_new
+
+    def box_pose_from_collision_array(self, coll_points_x_axis, coll_points_y_axis):
+        coll_points_x_axis = coll_points_x_axis[1:]  # First point is just 0,0,0
+
+        # Dropping the z-coordinates
+        coll_points_x_axis = coll_points_x_axis[:, :2]
+        coll_points_y_axis = coll_points_y_axis[:, :2]
+
+        x_coords_x_axis = coll_points_x_axis[:, 0]
+        y_coords_x_axis = coll_points_x_axis[:, 1]
+
+        x_coords_y_axis = coll_points_y_axis[:, 0]
+        y_coords_y_axis = coll_points_y_axis[:, 1]
+
+        x_coords_x_axis, y_coords_x_axis, x_axis_m, x_axis_c = self.filter_and_regress_coll_points(x_coords_x_axis, y_coords_x_axis, 0.9)
+        x_coords_y_axis, y_coords_y_axis, y_axis_m, y_axis_c = self.filter_and_regress_coll_points(x_coords_y_axis, y_coords_y_axis, 0.9)
+
+        a = np.array([[x_axis_m, 1], [y_axis_m, 1]])
+        b = np.array([x_axis_c, y_axis_c])
+        intersection = np.linalg.solve(a, b)
+
+        delta_y = (x_coords_x_axis[-1] * x_axis_m + x_axis_c) - (x_coords_x_axis[0] * x_axis_m + x_axis_c)
+
+        x_axis_angle = np.arctan2(delta_y, x_coords_x_axis[-1] - x_coords_x_axis[0])
+        orientation = quaternion.from_euler_angles(np.array([0, 0, x_axis_angle]))
+
+        pose_box = array_quat_2_pose(np.array([intersection[0], intersection[1], 0.1]), orientation)
+        return pose_box
 
 if __name__ == '__main__':
     
