@@ -358,7 +358,7 @@ class BoardDetector():
 
         delta_y = (x_coords_x_axis[-1] * x_axis_m + x_axis_c) - (x_coords_x_axis[0] * x_axis_m + x_axis_c)
 
-        x_axis_angle = np.arctan2(delta_y, x_coords_x_axis[-1] - x_coords_x_axis[0]) - np.pi / 2
+        x_axis_angle = np.arctan2(delta_y, x_coords_x_axis[-1] - x_coords_x_axis[0]) - 1.5 * np.pi
         orientation = quaternion.from_euler_angles(np.array([0, 0, x_axis_angle]))
         print("box angle ", np.degrees(x_axis_angle))
         angle_between_lines = np.arctan((x_axis_m - y_axis_m)/(1 + x_axis_m * y_axis_m))
