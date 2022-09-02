@@ -290,11 +290,13 @@ class BoardDetector():
             self.r.sleep()
 
     def box_pose_from_two_collisions(self, coll_points, coll_oris):
+        coll_points = np.array(coll_points)
+        coll_oris = np.array(coll_oris)
         point_x_axis_1 = np.average(coll_points[:2, :2])
         point_y_axis_1 = np.average(coll_points[2:, :2])
 
-        coll_ori_x_axis_avg = np.average(coll_oris[:2])
-        coll_ori_y_axis_avg = np.average(coll_oris[2:])
+        coll_ori_x_axis_avg = np.average(quaternion.as_quat_array(coll_oris[:2]))
+        coll_ori_y_axis_avg = np.average(quaternion.as_quat_array(coll_oris[2:]))
 
         coll_ori_x_axis_rot = quaternion.as_rotation_matrix(coll_ori_x_axis_avg)
         coll_ori_y_axis_rot = quaternion.as_rotation_matrix(coll_ori_y_axis_avg)
@@ -324,8 +326,8 @@ class BoardDetector():
             num = np.dot(dap, dp)
             return (num / denom.astype(float)) * db + b1
 
-        point_x_axis_2 = point_x_axis_1 + 2 * x_axis_vector
-        point_y_axis_2 = point_y_axis_1 + 2 * y_axis_vector
+        point_x_axis_2 = point_x_axis_1 + 2 * y_axis_vector
+        point_y_axis_2 = point_y_axis_1 + 2 * x_axis_vector
 
         intersection = seg_intersect(point_x_axis_1, point_x_axis_2, point_y_axis_1, point_y_axis_2)
 

@@ -12,8 +12,8 @@ stiffness:
   K_ori: 20
 
 pose_box_ref_guess:
-  trans_ref_guess: [0.5361, 0.1957, 0.11]
-  rot_ref_guess: [0.6088, 0, 0, -0.7933]
+  trans_ref_guess: [0.5427, 0.1874, 0.11]
+  rot_ref_guess: [0.5373, 0, 0, -0.8434]
 
 transform_cam:
   trans_cam: [0.483, 0.021, 0.58]
