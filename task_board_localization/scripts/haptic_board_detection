@@ -20,7 +20,6 @@ from sympy import Point, Line
 from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 import sys
 import rospkg
-import pdb
 
 class BoardDetector():
     '''
@@ -31,15 +30,14 @@ class BoardDetector():
         self.rospack = rospkg.RosPack()
         self.package_path = self.rospack.get_path("task_board_localization")
 	
-        self.force_threshold = rospy.get_param('board_touch/force_threshold', 10)
+        self.force_threshold = rospy.get_param('board_touch/force_threshold', 15)
         self.board_width = rospy.get_param('board_touch/width', 0.16)
         self.board_length = rospy.get_param('board_touch/length', 0.26)
-        self.board_height = rospy.get_param('board_touch/height', 0.07)
+        self.board_height = rospy.get_param('board_touch/height', 0.09)
         self.clearance = rospy.get_param('board_touch/clearance', 0.07)
-        self.K_pos = rospy.get_param('stiffness/K_pos', 400)
+        self.K_pos = rospy.get_param('stiffness/K_pos', 600)
         self.K_z = rospy.get_param('stiffness/K_z', 1000)
-        self.K_ori = rospy.get_param('stiffness/K_ori', 50)
-        self.record = False
+        self.K_ori = rospy.get_param('stiffness/K_ori', 20)
         self.trans_ref_guess = np.array(rospy.get_param('pose_box_ref_guess/trans_ref_guess', '[0.5, 0.1512, 0.16]'))
         self.rot_ref_guess = list_2_quaternion(rospy.get_param('pose_box_ref_guess/rot_ref_guess', '[0.7148849557796, 0, 0, -0.699187185237258]'))
         self.trans_cam = np.array(rospy.get_param('transform_cam/trans_cam', '[0.483, 0.021, 0.58]'))
@@ -67,12 +65,10 @@ class BoardDetector():
         self.trajz = []
         self.ori_x = np.quaternion(1, 0, 0, 0)
         self.ori_y = np.quaternion(1, 0, 0, 0)
-        self.coll_points = [np.array([0, 0, 0])]
-        self.coll_points_x = []
-        self.coll_points_y = []
-        self.coll_oris = [np.array([0, 0, 0, 0])]
-        self.coll_oris_x = []
-        self.coll_oris_y = []
+        self.coll_points = [np.array([[0, 0, 0]])]
+        self.coll_points_to_save = []
+        self.coll_oris = [np.array([[0, 0, 0, 0]])]
+        self.coll_oris_to_save = []
 
         self.pose_icp = PoseStamped()
         self.pose_icp.pose.orientation.w = 1
@@ -102,8 +98,7 @@ class BoardDetector():
         self.torque_z = torque.z
         self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
         if self.force_feedback > self.force_threshold:
-            # print('\a')
-            # print("force exceeded,current force norm is", self.force_feedback)
+            # print("force exceeded,current point is", self.curr_pos, self.curr_ori)
             # print("current point ", self.curr_pos)
             self.coll_points.append(self.curr_pos)
             # print(self.coll_points, self.curr_pos)
@@ -125,35 +120,52 @@ class BoardDetector():
         # I'm assuming we are putting the coordinate systems in a corner,
         # and that x-axis goes along length and y along width
 
-        
-        p1x = [-self.clearance, self.board_width*0.65, self.clearance] # Point outside and above box
-        p2x = [p1x[0], p1x[1], -self.board_height*0.6] # Point right outside but "on level" vertically with box
-        p3x = [self.board_width/2, p2x[1], p2x[2]] # Point inside box (so for collision) 
-        p4x = [p3x[0], self.board_width*0.25, p3x[2]] # Point to the side of previous point, to 'feel' the wall 
+        # Point outside and above box
+        p1x = [-self.clearance, self.board_width * 0.65, self.clearance]
+        p2x = [p1x[0], p1x[1], -self.board_height*0.6]
+        p3x = [self.board_width/2, p2x[1], p2x[2]]
 
-        self.points_x = [p1x, p2x, p3x, p4x]
+        self.points_x = [p1x, p2x, p3x]
         self.poses_x = []
         self.poses_x[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
+        
+        p1x = [-self.clearance, self.board_width * 0.3, self.clearance]
+        p2x = [p1x[0], p1x[1], -self.board_height*0.6]
+        p3x = [self.board_width/2, p2x[1], p2x[2]]
 
-        p1y = [self.board_length*0.72, -self.clearance, self.clearance]
+        self.points_x = [p1x, p2x, p3x]
+        self.poses_x_2 = []
+        self.poses_x_2[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
+
+        p1y = [self.board_length*0.7, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.7]
         p3y = [p2y[0], self.board_width * 0.5, p2y[2]]
-        p4y = [self.board_length*0.55, p3y[1], p3y[2]]
 
-        self.points_y = [p1y, p2y, p3y, p4y]
+        self.points_y = [p1y, p2y, p3y]
         self.poses_y = []
         self.poses_y[:] = [array_quat_2_pose(point_y, self.ori_y) for point_y in self.points_y]
+        
+        p1y = [self.board_length*0.2, -self.clearance, self.clearance]
+        p2y = [p1y[0], p1y[1], -self.board_height*0.7]
+        p3y = [p2y[0], self.board_width * 0.5, p2y[2]]
+
+        self.points_y = [p1y, p2y, p3y]
+        self.poses_y_2 = []
+        self.poses_y_2[:] = [array_quat_2_pose(point_y, self.ori_y) for point_y in self.points_y]
 
         return
 
     def execute_trajectory(self, poses):
         for pose in poses:
-            if pose == poses[-1] or pose == poses[-2]: self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
+            if pose == poses[-1]: self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
             else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori, 0.0)
-            if pose == poses[-1]:
-                self.record = True
+
             self.go_to_pose(pose)
-            self.record = False
+
+        self.coll_points_to_save.append(self.coll_points[-1])
+        self.coll_oris_to_save.append(self.coll_oris[-1])
+
+        self.go_to_pose(poses[0])
     
     def execute_touch(self, offline):
         self.get_trajectories()
@@ -175,31 +187,24 @@ class BoardDetector():
         poses_x_transformed[:] = [transform_pose(pose_x, transform) for pose_x in self.poses_x]
         self.execute_trajectory(poses_x_transformed)
         
-        self.coll_points_x = self.coll_points
-        self.coll_oris_x = self.coll_oris
-        
-        self.go_to_pose(poses_x_transformed[0])
-        
-        file_suffix = rospy.get_param("filenames_suffix")
-        np.save(f"{self.package_path}/models/coll_points_x_{file_suffix}", self.coll_points_x)
-        np.save(f"{self.package_path}/models/coll_oris_x_{file_suffix}", self.coll_oris_x)
-        
-        self.coll_points = []
-        self.coll_oris = []
-        
+        poses_x_transformed = []
+        poses_x_transformed[:] = [transform_pose(pose_x, transform) for pose_x in self.poses_x_2]
+        self.execute_trajectory(poses_x_transformed)
+
+
         poses_y_transformed = []
         poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_y]
         self.execute_trajectory(poses_y_transformed)
         
-        self.coll_points_y = self.coll_points
-        self.coll_oris_y = self.coll_oris
+        poses_y_transformed = []
+        poses_y_transformed[:] = [transform_pose(pose_y, transform) for pose_y in self.poses_y_2]
+        self.execute_trajectory(poses_y_transformed)
         
-        self.go_to_pose(poses_y_transformed[0])
-
-        np.save(f"{self.package_path}/models/coll_points_y_{file_suffix}", self.coll_points_y)
-        np.save(f"{self.package_path}/models/coll_oris_y_{file_suffix}", self.coll_oris_y)
-        
-        self.pose_box = self.box_pose_from_collision_array(self.coll_points_x, self.coll_points_y)
+        file_suffix = rospy.get_param("filenames_suffix")
+        np.save(f"{self.package_path}/models/coll_points_{file_suffix}", self.coll_points_to_save)
+        np.save(f"{self.package_path}/models/coll_oris_{file_suffix}", self.coll_oris_to_save)
+        self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
+                                                       self.coll_points_to_save[1], self.coll_oris_to_save[1])
         transform_box = pose_st_2_transformation(self.pose_box)
         np.save(f"{self.package_path}/models/transform_box_{file_suffix}", transform_box)
 
@@ -323,50 +328,6 @@ class BoardDetector():
         
         return pose
 
-    def filter_and_regress_coll_points(self, x_coords, y_coords, frac_points_to_keep):
-        m_init, c_init = np.polyfit(x_coords, y_coords, 1)
-        pred = m_init * x_coords + c_init
-        score_array = (y_coords - pred) ** 2
-        top_idx = np.argsort(score_array)[:int(len(x_coords) * frac_points_to_keep)]
-        x_coords = x_coords[top_idx]
-        y_coords = y_coords[top_idx]
-        m_new, c_new = np.polyfit(x_coords, y_coords, 1)
-        return x_coords, y_coords, m_new, c_new
-
-    def box_pose_from_collision_array(self, coll_points_x_axis, coll_points_y_axis):
-        coll_points_x_axis = np.array(coll_points_x_axis)
-        coll_points_y_axis = np.array(coll_points_y_axis)
-
-        coll_points_x_axis = coll_points_x_axis[1:]  # First point is just 0,0,0
-
-        # Dropping the z-coordinates
-        coll_points_x_axis = coll_points_x_axis[:, :2]
-        coll_points_y_axis = coll_points_y_axis[:, :2]
-        
-        x_coords_x_axis = coll_points_x_axis[:, 0]
-        y_coords_x_axis = coll_points_x_axis[:, 1]
-
-        x_coords_y_axis = coll_points_y_axis[:, 0]
-        y_coords_y_axis = coll_points_y_axis[:, 1]
-
-        x_coords_x_axis, y_coords_x_axis, x_axis_m, x_axis_c = self.filter_and_regress_coll_points(x_coords_x_axis, y_coords_x_axis, 0.9)
-        x_coords_y_axis, y_coords_y_axis, y_axis_m, y_axis_c = self.filter_and_regress_coll_points(x_coords_y_axis, y_coords_y_axis, 0.9)
-
-        a = np.array([[-x_axis_m, 1], [-y_axis_m, 1]])
-        b = np.array([x_axis_c, y_axis_c])
-        intersection = np.linalg.solve(a, b)
-
-        delta_y = (x_coords_x_axis[-1] * x_axis_m + x_axis_c) - (x_coords_x_axis[0] * x_axis_m + x_axis_c)
-
-        x_axis_angle = np.arctan2(delta_y, x_coords_x_axis[-1] - x_coords_x_axis[0]) - 1.5 * np.pi
-        orientation = quaternion.from_euler_angles(np.array([0, 0, x_axis_angle]))
-        print("box angle ", np.degrees(x_axis_angle))
-        angle_between_lines = np.arctan((x_axis_m - y_axis_m)/(1 + x_axis_m * y_axis_m))
-        print("angle between lines ", angle_between_lines)
-        
-        pose_box = array_quat_2_pose(np.array([intersection[0], intersection[1], 0.1]), orientation)
-        return pose_box
-
 if __name__ == '__main__':
     
     rospy.init_node('BoardDetector', anonymous=True)
@@ -377,6 +338,7 @@ if __name__ == '__main__':
     time.sleep(1)
     # Add line with request to the pointcloud server to fill out pose_icp
     detector.execute_touch(offline)
+    print('two collision poses are\n', detector.coll_points_to_save, detector.coll_oris_to_save)
     print('box pose is\n', detector.pose_box)
 
     transform_ref = np.load(f"{detector.package_path}/models/{detector.transform_ref_filename}")
