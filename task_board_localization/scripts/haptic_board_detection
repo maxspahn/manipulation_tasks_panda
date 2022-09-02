@@ -203,8 +203,7 @@ class BoardDetector():
         file_suffix = rospy.get_param("filenames_suffix")
         np.save(f"{self.package_path}/models/coll_points_{file_suffix}", self.coll_points_to_save)
         np.save(f"{self.package_path}/models/coll_oris_{file_suffix}", self.coll_oris_to_save)
-        self.pose_box = self.box_pose_from_2_points(self.coll_points_to_save[0], self.coll_oris_to_save[0],
-                                                       self.coll_points_to_save[1], self.coll_oris_to_save[1])
+        self.pose_box = self.box_pose_from_two_collisions(self.coll_points_to_save, self.coll_oris_to_save)
         transform_box = pose_st_2_transformation(self.pose_box)
         np.save(f"{self.package_path}/models/transform_box_{file_suffix}", transform_box)
 
@@ -289,6 +288,50 @@ class BoardDetector():
             
             self.goal_pub.publish(goal)
             self.r.sleep()
+
+    def box_pose_from_two_collisions(self, coll_points, coll_oris):
+        point_x_axis_1 = np.average(coll_points[:2, :2])
+        point_y_axis_1 = np.average(coll_points[2:, :2])
+
+        coll_ori_x_axis_avg = np.average(coll_oris[:2])
+        coll_ori_y_axis_avg = np.average(coll_oris[2:])
+
+        coll_ori_x_axis_rot = quaternion.as_rotation_matrix(coll_ori_x_axis_avg)
+        coll_ori_y_axis_rot = quaternion.as_rotation_matrix(coll_ori_y_axis_avg)
+
+        x_axis_vector = coll_ori_y_axis_rot[:, 1]
+        y_axis_vector = coll_ori_x_axis_rot[:, 1]
+
+        x_axis_angle = np.arctan2(x_axis_vector[1], x_axis_vector[0])
+
+        ori_quat = quaternion.from_euler_angles(np.array([0, 0, x_axis_angle]))
+
+        def perp(a):
+            b = np.empty_like(a)
+            b[0] = -a[1]
+            b[1] = a[0]
+            return b
+
+        # line segment a given by endpoints a1, a2
+        # line segment b given by endpoints b1, b2
+        # return
+        def seg_intersect(a1, a2, b1, b2):
+            da = a2 - a1
+            db = b2 - b1
+            dp = a1 - b1
+            dap = perp(da)
+            denom = np.dot(dap, db)
+            num = np.dot(dap, dp)
+            return (num / denom.astype(float)) * db + b1
+
+        point_x_axis_2 = point_x_axis_1 + 2 * x_axis_vector
+        point_y_axis_2 = point_y_axis_1 + 2 * y_axis_vector
+
+        intersection = seg_intersect(point_x_axis_1, point_x_axis_2, point_y_axis_1, point_y_axis_2)
+
+        pose_box = array_quat_2_pose(np.array([intersection[0], intersection[1], 0.1]), ori_quat)
+
+        return pose_box
 
     def box_pose_from_2_points(self, point1, rot1, point2, rot2):
 
