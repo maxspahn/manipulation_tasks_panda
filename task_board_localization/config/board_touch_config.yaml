@@ -2,17 +2,17 @@ board_touch:
   board_dimensions:
     width: 0.16
     length: 0.26
-    height: 0.07
+    height: 0.09
   clearance: 0.07
-  force_threshold: 10
+  force_threshold: 15
 
 stiffness:
   K_pos: 400
   K_z: 1000
-  K_ori: 50
+  K_ori: 20
 
 pose_box_ref_guess:
-  trans_ref_guess: [0.5361, 0.1957, 0.09]
+  trans_ref_guess: [0.5361, 0.1957, 0.11]
   rot_ref_guess: [0.6088, 0, 0, -0.7933]
 
 transform_cam:
