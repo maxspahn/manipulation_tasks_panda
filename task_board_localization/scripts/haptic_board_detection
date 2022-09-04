@@ -18,6 +18,8 @@ import dynamic_reconfigure.client
 from pyquaternion import Quaternion
 from sympy import Point, Line
 from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
+from task_board_localization.srv import PointDetect, PointDetectRequest, PointDetectResponse
+from visual_board_detection_client import point_detect_client
 import sys
 import rospkg
 
@@ -179,7 +181,8 @@ class BoardDetector():
         else:
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
             transform_cam = pose_st_2_transformation(pose_cam)
-            transform_icp = pose_st_2_transformation(self.pose_icp)
+            resp: PointDetectResponse = point_detect_client(record=False)
+            transform_icp = pose_st_2_transformation(resp.pose)
             transform_ref = np.load(f"{self.package_path}/models/{self.transform_ref_filename}")
             transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
 
