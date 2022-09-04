@@ -295,8 +295,8 @@ class BoardDetector():
     def box_pose_from_two_collisions(self, coll_points, coll_oris):
         coll_points = np.array(coll_points)
         coll_oris = np.array(coll_oris)
-        point_x_axis_1 = np.average(coll_points[:2, :2])
-        point_y_axis_1 = np.average(coll_points[2:, :2])
+        point_x_axis_1 = np.average(coll_points[2:, :2], axis=0)
+        point_y_axis_1 = np.average(coll_points[:2, :2], axis=0)
 
         coll_ori_x_axis_avg = np.average(quaternion.as_quat_array(coll_oris[:2]))
         coll_ori_y_axis_avg = np.average(quaternion.as_quat_array(coll_oris[2:]))
@@ -304,8 +304,8 @@ class BoardDetector():
         coll_ori_x_axis_rot = quaternion.as_rotation_matrix(coll_ori_x_axis_avg)
         coll_ori_y_axis_rot = quaternion.as_rotation_matrix(coll_ori_y_axis_avg)
 
-        x_axis_vector = coll_ori_y_axis_rot[:, 1]
-        y_axis_vector = coll_ori_x_axis_rot[:, 1]
+        x_axis_vector = coll_ori_y_axis_rot[:, 1][:2]
+        y_axis_vector = coll_ori_x_axis_rot[:, 1][:2]
 
         x_axis_angle = np.arctan2(x_axis_vector[1], x_axis_vector[0])
 
