@@ -225,9 +225,7 @@ def point_detect(req):
     pose.orientation.y = detected_quat.y
     pose.orientation.z = detected_quat.z
     posestamp.pose = pose
-    resp = PointDetectResponse()
-    resp.pose = posestamp
-    return resp
+    return PointDetectResponse(posestamp)
 
 
 def point_server():
