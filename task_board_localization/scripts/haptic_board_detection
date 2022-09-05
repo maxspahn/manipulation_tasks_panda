@@ -9,7 +9,7 @@
 import rospy
 from geometry_msgs.msg import PoseStamped, WrenchStamped, PointStamped, QuaternionStamped, Pose, TransformStamped
 from std_msgs.msg import Float32MultiArray, Bool
-from sensor_msgs.msg import JointState
+from sensor_msgs.msg import JointState, PointCloud2
 import numpy as np
 import quaternion
 import time
@@ -19,9 +19,9 @@ from pyquaternion import Quaternion
 from sympy import Point, Line
 from manipulation_helpers.pose_transform_functions import orientation_2_quaternion, pose_st_2_transformation, position_2_array, array_quat_2_pose, transformation_2_pose, transform_pose, list_2_quaternion
 from task_board_localization.srv import PointDetect, PointDetectRequest, PointDetectResponse
-from visual_board_detection_client import point_detect_client
 import sys
 import rospkg
+import pdb
 
 class BoardDetector():
     '''
@@ -31,15 +31,17 @@ class BoardDetector():
         self.r = rospy.Rate(100)
         self.rospack = rospkg.RosPack()
         self.package_path = self.rospack.get_path("task_board_localization")
-	
+        self.icp_client = rospy.ServiceProxy("/point_detect", PointDetect)
+        rospy.wait_for_service("/point_detect",5)
         self.force_threshold = rospy.get_param('board_touch/force_threshold', 15)
-        self.board_width = rospy.get_param('board_touch/width', 0.16)
+        self.board_width = rospy.get_param('board_touch/width', 0.14)
         self.board_length = rospy.get_param('board_touch/length', 0.26)
         self.board_height = rospy.get_param('board_touch/height', 0.09)
         self.clearance = rospy.get_param('board_touch/clearance', 0.07)
         self.K_pos = rospy.get_param('stiffness/K_pos', 600)
-        self.K_z = rospy.get_param('stiffness/K_z', 1000)
-        self.K_ori = rospy.get_param('stiffness/K_ori', 20)
+        self.K_z = rospy.get_param('stiffness/K_z', 2000)
+        self.K_ori = rospy.get_param('stiffness/K_ori', 50)
+        self.K_ori_z = 20
         self.trans_ref_guess = np.array(rospy.get_param('pose_box_ref_guess/trans_ref_guess', '[0.5, 0.1512, 0.16]'))
         self.rot_ref_guess = list_2_quaternion(rospy.get_param('pose_box_ref_guess/rot_ref_guess', '[0.7148849557796, 0, 0, -0.699187185237258]'))
         self.trans_cam = np.array(rospy.get_param('transform_cam/trans_cam', '[0.483, 0.021, 0.58]'))
@@ -109,6 +111,7 @@ class BoardDetector():
 
     def transform_icp_callback(self, pose_icp):
         self.pose_icp = pose_icp
+        self.pose_icp.pose.position.z = 0
 
     # TODO this would be much better in a config file since the points are now fixed
     # points defined with respect to local initially detected base frame
@@ -123,7 +126,7 @@ class BoardDetector():
         # and that x-axis goes along length and y along width
 
         # Point outside and above box
-        p1x = [-self.clearance, self.board_width * 0.65, self.clearance]
+        p1x = [-self.clearance, self.board_width * 0.55, self.clearance]
         p2x = [p1x[0], p1x[1], -self.board_height*0.6]
         p3x = [self.board_width/2, p2x[1], p2x[2]]
 
@@ -131,7 +134,7 @@ class BoardDetector():
         self.poses_x = []
         self.poses_x[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
         
-        p1x = [-self.clearance, self.board_width * 0.3, self.clearance]
+        p1x = [-self.clearance, self.board_width * 0.45, self.clearance]
         p2x = [p1x[0], p1x[1], -self.board_height*0.6]
         p3x = [self.board_width/2, p2x[1], p2x[2]]
 
@@ -140,15 +143,15 @@ class BoardDetector():
         self.poses_x_2[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
 
         p1y = [self.board_length*0.7, -self.clearance, self.clearance]
-        p2y = [p1y[0], p1y[1], -self.board_height*0.7]
+        p2y = [p1y[0], p1y[1], -self.board_height*0.6]
         p3y = [p2y[0], self.board_width * 0.5, p2y[2]]
 
         self.points_y = [p1y, p2y, p3y]
         self.poses_y = []
         self.poses_y[:] = [array_quat_2_pose(point_y, self.ori_y) for point_y in self.points_y]
         
-        p1y = [self.board_length*0.2, -self.clearance, self.clearance]
-        p2y = [p1y[0], p1y[1], -self.board_height*0.7]
+        p1y = [self.board_length*0.25, -self.clearance, self.clearance]
+        p2y = [p1y[0], p1y[1], -self.board_height*0.6]
         p3y = [p2y[0], self.board_width * 0.5, p2y[2]]
 
         self.points_y = [p1y, p2y, p3y]
@@ -159,11 +162,12 @@ class BoardDetector():
 
     def execute_trajectory(self, poses):
         for pose in poses:
-            if pose == poses[-1]: self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
-            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori, 0.0)
+            if pose == poses[-1]: self.set_stiffness(400, 400, self.K_z, self.K_ori, self.K_ori, 0.0, 0.0)
+            else:      self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori_z, 0.0)
 
             self.go_to_pose(pose)
-
+            
+        rospy.sleep(2)    
         self.coll_points_to_save.append(self.coll_points[-1])
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
@@ -179,12 +183,14 @@ class BoardDetector():
             pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
             transform = pose_st_2_transformation(pose_box_ref_guess)
         else:
+            pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
+            transform_box_guess = pose_st_2_transformation(pose_box_ref_guess)
             pose_cam = array_quat_2_pose(self.trans_cam, self.rot_cam)
             transform_cam = pose_st_2_transformation(pose_cam)
-            resp: PointDetectResponse = point_detect_client(record=False)
-            transform_icp = pose_st_2_transformation(resp.pose)
+            transform_icp = pose_st_2_transformation(self.pose_icp)
             transform_ref = np.load(f"{self.package_path}/models/{self.transform_ref_filename}")
             transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
+            pdb.set_trace()
 
         poses_x_transformed = []
         poses_x_transformed[:] = [transform_pose(pose_x, transform) for pose_x in self.poses_x]
@@ -329,8 +335,8 @@ class BoardDetector():
             num = np.dot(dap, dp)
             return (num / denom.astype(float)) * db + b1
 
-        point_x_axis_2 = point_x_axis_1 + 2 * y_axis_vector
-        point_y_axis_2 = point_y_axis_1 + 2 * x_axis_vector
+        point_x_axis_2 = point_x_axis_1 + 2 * x_axis_vector
+        point_y_axis_2 = point_y_axis_1 + 2 * y_axis_vector
 
         intersection = seg_intersect(point_x_axis_1, point_x_axis_2, point_y_axis_1, point_y_axis_2)
 
