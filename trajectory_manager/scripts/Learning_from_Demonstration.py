@@ -110,7 +110,7 @@ class Learning_from_Demonstration():
 
     def force_feedback_callback(self, feedback):
         self.force = feedback.wrench.force
-        self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
+        self.force_feedback = np.linalg.norm(np.array([self.force.x, self.force.y, self.force.z]))
 
     def joint_states_callback(self, data):
         self.curr_joint = data.position[:7]
@@ -327,7 +327,7 @@ class Learning_from_Demonstration():
 
             self.goal_pub.publish(goal)
 
-            if self.force.z > 5:
+            if self.force.z > 10:
                 spiral_success, offset_correction = self.spiral_search()
                 if spiral_success:
                     self.recorded_traj[0, i:] += offset_correction[0]
@@ -350,22 +350,24 @@ class Learning_from_Demonstration():
                 break
 
     def spiral_search(self):
-        pos_init = self.curr_pos
+        pos_init = np.copy(self.curr_pos)
         ori_quat = quaternion.as_quat_array(self.curr_ori)
         goal_pose = array_quat_2_pose(pos_init, ori_quat)
         time_spiral = 0
         spiral_success = False
-        for i in range(50):
-            spiral_width = 0.3  ######### Should we make this a class variable?
-            goal_pose.pose.position.x = goal_pose.pose.position.x + np.cos(
-                spiral_width * time_spiral) * 0.02 * time_spiral  # What is the 0.02?
-            goal_pose.pose.position.y = goal_pose.pose.position.y + np.sin(
-                spiral_width * time_spiral) * 0.02 * time_spiral  # What is the 0.02?
+        spiral_width = 2 * np.pi
+        for i in range(1000):
+            spiral_width = 2 * np.pi   ######### Should we make this a class variable?
+            goal_pose.pose.position.x = pos_init[0] + np.cos(
+                spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
+            goal_pose.pose.position.y = pos_init[1] + np.sin(
+                spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
             self.goal_pub.publish(goal_pose)
-            if np.abs(pos_init[2] - self.curr_pos[2]) >= 0.01:
+            if np.abs(pos_init[2] - self.curr_pos[2]) >= 0.005:
                 spiral_success = True
                 break
             time_spiral += 1. / 100.
+            self.r.sleep()
         offset_correction = self.curr_pos - pos_init
 
         return spiral_success, offset_correction
