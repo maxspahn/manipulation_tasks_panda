@@ -134,7 +134,7 @@ class BoardDetector():
         self.poses_x = []
         self.poses_x[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
         
-        p1x = [-self.clearance, self.board_width * 0.45, self.clearance]
+        p1x = [-self.clearance, self.board_width * 0.5, self.clearance]
         p2x = [p1x[0], p1x[1], -self.board_height*0.6]
         p3x = [self.board_width/2, p2x[1], p2x[2]]
 
@@ -150,7 +150,7 @@ class BoardDetector():
         self.poses_y = []
         self.poses_y[:] = [array_quat_2_pose(point_y, self.ori_y) for point_y in self.points_y]
         
-        p1y = [self.board_length*0.25, -self.clearance, self.clearance]
+        p1y = [self.board_length*0.3, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.6]
         p3y = [p2y[0], self.board_width * 0.5, p2y[2]]
 
@@ -230,7 +230,7 @@ class BoardDetector():
         squared_dist = np.sum(np.subtract(start, goal_) ** 2, axis=0)
         dist = np.sqrt(squared_dist)
         print("dist", dist)
-        interp_dist = 0.001 /2  # [m]
+        interp_dist = 0.001  # [m]
         step_num_lin = math.floor(dist / interp_dist)
 
         print("num of steps linear", step_num_lin)
@@ -249,7 +249,7 @@ class BoardDetector():
         inner_prod = q_start.x * q_goal.x + q_start.y * q_goal.y + q_start.z * q_goal.z + q_start.w * q_goal.w
         theta = np.arccos(np.abs(inner_prod))
         print(theta)
-        interp_dist_polar = 0.001/2
+        interp_dist_polar = 0.002
         step_num_polar = math.floor(theta / interp_dist_polar)
 
         print("num of steps polar", step_num_polar)
