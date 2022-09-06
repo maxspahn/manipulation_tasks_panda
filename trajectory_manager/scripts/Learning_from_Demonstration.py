@@ -109,7 +109,7 @@ class Learning_from_Demonstration():
         self.grip_width =curr_width.position[7]+curr_width.position[8]
 
     def force_feedback_callback(self, feedback):
-        force = feedback.wrench.force
+        self.force = feedback.wrench.force
         self.force_feedback = np.linalg.norm(np.array([force.x, force.y, force.z]))
 
     def joint_states_callback(self, data):
@@ -326,7 +326,13 @@ class Learning_from_Demonstration():
                 self.feedback = np.zeros(4)
 
             self.goal_pub.publish(goal)
-            
+
+            if self.force.z > 5:
+                spiral_success, offset_correction = self.spiral_search()
+                if spiral_success:
+                    self.recorded_traj[0, i:] += offset_correction[0]
+                    self.recorded_traj[1, i:] += offset_correction[1]
+
             grip_command = Float32()
 
             grip_command.data = self.recorded_gripper[0][i]
@@ -342,6 +348,28 @@ class Learning_from_Demonstration():
             # Stop playback if at end of trajectory (some indices might be deleted by feedback)
             if i == self.recorded_traj.shape[1]-1:
                 break
+
+    def spiral_search(self):
+        pos_init = self.curr_pos
+        ori_quat = quaternion.as_quat_array(self.curr_ori)
+        goal_pose = array_quat_2_pose(pos_init, ori_quat)
+        time_spiral = 0
+        spiral_success = False
+        for i in range(50):
+            spiral_width = 0.3  ######### Should we make this a class variable?
+            goal_pose.pose.position.x = goal_pose.pose.position.x + np.cos(
+                spiral_width * time_spiral) * 0.02 * time_spiral  # What is the 0.02?
+            goal_pose.pose.position.y = goal_pose.pose.position.y + np.sin(
+                spiral_width * time_spiral) * 0.02 * time_spiral  # What is the 0.02?
+            self.goal_pub.publish(goal_pose)
+            if np.abs(pos_init[2] - self.curr_pos[2]) >= 0.01:
+                spiral_success = True
+                break
+            time_spiral += 1. / 100.
+        offset_correction = self.curr_pos - pos_init
+
+        return spiral_success, offset_correction
+
 
     def transform_trajectory(self, transform):
         # rospy.sleep(1)
