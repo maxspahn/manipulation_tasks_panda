@@ -331,11 +331,11 @@ class Learning_from_Demonstration():
 
             self.goal_pub.publish(goal)
             
-            while np.linalg.norm(self.curr_pos - self.recorded_traj[:,i]) >= pos_threshold or np.arccos(np.abs(np.dot(self.curr_ori, self.recorded_ori[:,i]))) >= ori_threshold:
-            	self.r.sleep()
-            	print("I'm stuck")
-            	print(np.linalg.norm(self.curr_pos - self.recorded_traj[:,i]))
-            	print(np.arccos(np.abs(np.dot(self.curr_ori, self.recorded_ori[:,i]))))
+           # while np.linalg.norm(self.curr_pos - self.recorded_traj[:,i]) >= pos_threshold or np.arccos(np.abs(np.dot(self.curr_ori, self.recorded_ori[:,i]))) >= ori_threshold:
+            	#self.r.sleep()
+            	#print("I'm stuck")
+            	#print(np.linalg.norm(self.curr_pos - self.recorded_traj[:,i]))
+            	#print(np.arccos(np.abs(np.dot(self.curr_ori, self.recorded_ori[:,i]))))
             
             grip_command = Float32()
 
