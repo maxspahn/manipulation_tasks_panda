@@ -1,23 +1,23 @@
 board_touch:
   board_dimensions:
-    width: 0.14
+    width: 0.15
     length: 0.26
     height: 0.09
-  clearance: 0.07
+  clearance: 0.1
   force_threshold: 10
 
 stiffness:
-  K_pos: 1000
-  K_z: 2000
-  K_ori: 20
+  K_pos: 4000
+  K_z: 4000
+  K_ori: 40
 
 pose_box_ref_guess:
-  trans_ref_guess: [0.47, 0.1500, 0.1]
+  trans_ref_guess: [0.59, 0.19, 0.1]
   rot_ref_guess: [0.707, 0, 0, -0.707]
 
 transform_cam:
-  trans_cam: [0.62, 0.18, 0.575]
-  rot_cam: [0.008, 0.735, -0.677, -0.014]
+  trans_cam: [0.62, 0.04, 0.391]
+  rot_cam: [0.001, 0.736, -0.677, -0.013]
 
 cartesian_pose_topic_name: '/cartesian_pose'
 force_torque_ext_topic: '/force_torque_ext'
