@@ -150,17 +150,17 @@ class BoardDetector():
 
             self.go_to_pose(pose)
         pose_further = poses[-1]
-        while self.force_feedback <= 15:
+        while self.force_feedback <= 20:
             print("force feedback", self.force_feedback)
             if x_coll:
                 x_axis_vector = self.transform[:2, 0]
-                pose_further.pose.position.x += 0.002 * x_axis_vector[0]
-                pose_further.pose.position.y += 0.002 * x_axis_vector[1]
+                pose_further.pose.position.x += 0.01 * x_axis_vector[0]
+                pose_further.pose.position.y += 0.01 * x_axis_vector[1]
                 self.go_to_pose(pose_further)
             else:
                 y_axis_vector = self.transform[:2, 1]
-                pose_further.pose.position.x += 0.002 * y_axis_vector[0]
-                pose_further.pose.position.y += 0.002 * y_axis_vector[1]
+                pose_further.pose.position.x += 0.01 * y_axis_vector[0]
+                pose_further.pose.position.y += 0.01 * y_axis_vector[1]
                 self.go_to_pose(pose_further)
 
         rospy.sleep(6)    
@@ -177,7 +177,7 @@ class BoardDetector():
         # the reference pose of the recordings), 'online' the perception is used to get the 'initial guess'
         if offline:
             pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
-            transform = pose_st_2_transformation(pose_box_ref_guess)
+            self.transform = pose_st_2_transformation(pose_box_ref_guess)
         else:
             pose_box_ref_guess = array_quat_2_pose(self.trans_ref_guess, self.rot_ref_guess)
             transform_box_guess = pose_st_2_transformation(pose_box_ref_guess)
