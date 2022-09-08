@@ -267,7 +267,8 @@ class Learning_from_Demonstration():
             self.goal_pub.publish(goal)
             self.r.sleep()
 
-    def execute(self):
+    def execute(self, spiral_flag):
+        print("spiral flag", bool(int(spiral_flag)))
         ##### Do we want to keep the sleep for closing the gripper?
         grip_command_old = self.recorded_gripper[0][0]
         print('entered execute')
@@ -310,9 +311,6 @@ class Learning_from_Demonstration():
             if self.pose_ref_2_new:
             	goal = transform_pose(goal, transform)
             
-            if self.spiral:
-                self.perf_spiral(goal)
-
             if np.sum(self.feedback)!=0:
                 for j in range(self.recorded_traj.shape[1]):
                     x = self.feedback[0]*self.square_exp(i, j)
@@ -331,7 +329,7 @@ class Learning_from_Demonstration():
 
             self.goal_pub.publish(goal)
             
-            if self.force.z > 10:
+            if self.force.z > 10 and bool(int(spiral_flag)):
                 spiral_success, offset_correction = self.spiral_search(goal)
                 if spiral_success:
                     self.recorded_traj[0, i:] += offset_correction[0]
@@ -361,6 +359,7 @@ class Learning_from_Demonstration():
         time_spiral = 0
         spiral_success = False
         spiral_width = 2 * np.pi
+        self.set_stiffness(4000, 4000, 1000, 30, 30, 30, 0)
         for i in range(10000):
             spiral_width = 2 * np.pi   ######### Should we make this a class variable?
             goal_pose.pose.position.x = pos_init[0] + np.cos(
@@ -368,11 +367,12 @@ class Learning_from_Demonstration():
             goal_pose.pose.position.y = pos_init[1] + np.sin(
                 spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
             self.goal_pub.publish(goal_pose)
-            if self.force.z <= 5: #np.abs(goal_init[2] - self.curr_pos[2]) < 0.001:
+            if self.force.z <= 2: #np.abs(goal_init[2] - self.curr_pos[2]) < 0.001:
                 spiral_success = True
                 break
             time_spiral += 1. / 100.
             self.r.sleep()
+        self.set_stiffness(4000, 4000, 4000, 30, 30, 30, 0)    
         offset_correction = self.curr_pos - goal_init
 
         return spiral_success, offset_correction

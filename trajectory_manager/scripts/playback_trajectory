@@ -10,6 +10,7 @@ import rospy
 if __name__ == '__main__':
     try:
         arg1 = sys.argv[1]
+        spiral_flag = sys.argv[2]
     except IndexError:
         print("Usage: " + os.path.basename(__file__) + " <trajectory_file_name>")
         sys.exit(1)
@@ -18,7 +19,7 @@ if __name__ == '__main__':
     lfd.load(arg1)
     
     try:
-        lfd.execute()
+        lfd.execute(spiral_flag)
     except rospy.ROSInterruptException:
         pass
     
