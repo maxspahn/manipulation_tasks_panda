@@ -187,7 +187,7 @@ class BoardDetector():
             transform_icp = pose_st_2_transformation(self.pose_icp)
             transform_ref = np.load(f"{self.package_path}/models/{self.transform_ref_filename}")
             self.transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
-            pdb.set_trace()
+            # pdb.set_trace()
 
         poses_x_transformed = []
         poses_x_transformed[:] = [transform_pose(pose_x, self.transform) for pose_x in self.poses_x]
