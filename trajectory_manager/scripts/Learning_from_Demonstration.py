@@ -332,7 +332,7 @@ class Learning_from_Demonstration():
             self.goal_pub.publish(goal)
             
             if self.force.z > 10:
-                spiral_success, offset_correction = self.spiral_search()
+                spiral_success, offset_correction = self.spiral_search(goal)
                 if spiral_success:
                     self.recorded_traj[0, i:] += offset_correction[0]
                     self.recorded_traj[1, i:] += offset_correction[1]
@@ -353,26 +353,27 @@ class Learning_from_Demonstration():
             if i == self.recorded_traj.shape[1]-1:
                 break
 
-    def spiral_search(self):
-        pos_init = np.copy(self.curr_pos)
-        ori_quat = quaternion.as_quat_array(self.curr_ori)
-        goal_pose = array_quat_2_pose(pos_init, ori_quat)
+    def spiral_search(self, goal):
+        goal_init = position_2_array(goal.pose.position)
+        pos_init = self.curr_pos
+        ori_quat = orientation_2_quaternion(goal.pose.orientation)
+        goal_pose = array_quat_2_pose(goal_init, ori_quat)
         time_spiral = 0
         spiral_success = False
         spiral_width = 2 * np.pi
-        for i in range(1000):
+        for i in range(10000):
             spiral_width = 2 * np.pi   ######### Should we make this a class variable?
             goal_pose.pose.position.x = pos_init[0] + np.cos(
                 spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
             goal_pose.pose.position.y = pos_init[1] + np.sin(
                 spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
             self.goal_pub.publish(goal_pose)
-            if np.abs(pos_init[2] - self.curr_pos[2]) >= 0.005:
+            if self.force.z <= 5: #np.abs(goal_init[2] - self.curr_pos[2]) < 0.001:
                 spiral_success = True
                 break
             time_spiral += 1. / 100.
             self.r.sleep()
-        offset_correction = self.curr_pos - pos_init
+        offset_correction = self.curr_pos - goal_init
 
         return spiral_success, offset_correction
 
