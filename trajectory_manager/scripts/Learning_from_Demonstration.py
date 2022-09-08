@@ -292,8 +292,7 @@ class Learning_from_Demonstration():
 
             goal.header.seq = 1
             goal.header.stamp = rospy.Time.now()
-            goal.header.frame_id = "map"
-
+            goal.header.frame_id = "map"		
             goal.pose.position.x = self.recorded_traj[0][i]
             goal.pose.position.y = self.recorded_traj[1][i]
             goal.pose.position.z = self.recorded_traj[2][i]
@@ -302,6 +301,11 @@ class Learning_from_Demonstration():
             goal.pose.orientation.x = self.recorded_ori[1][i]
             goal.pose.orientation.y = self.recorded_ori[2][i]
             goal.pose.orientation.z = self.recorded_ori[3][i]
+            
+            ori_threshold = 0.3
+            pos_threshold = 0.1
+            
+            
             
             if self.pose_ref_2_new:
             	goal = transform_pose(goal, transform)
@@ -326,7 +330,7 @@ class Learning_from_Demonstration():
                 self.feedback = np.zeros(4)
 
             self.goal_pub.publish(goal)
-
+            
             if self.force.z > 10:
                 spiral_success, offset_correction = self.spiral_search()
                 if spiral_success:
