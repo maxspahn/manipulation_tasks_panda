@@ -25,7 +25,7 @@ class Learning_from_Demonstration():
         self.K_ns=10 ##### not being used
         self.feedback=np.zeros(4)
         self.feedback_gain=0.002
-        self.length_scale = 0.1
+        self.length_scale = 0.03
         self.correction_window = 300
         self.curr_pos=None
         self.curr_ori=None
@@ -46,6 +46,7 @@ class Learning_from_Demonstration():
         self.force_feedback_sub = rospy.Subscriber('/force_torque_ext', WrenchStamped, self.force_feedback_callback)
         self.goal_pub = rospy.Publisher('/equilibrium_pose', PoseStamped, queue_size=0)
         self.grip_pub = rospy.Publisher('/gripper_online', Float32, queue_size=0)
+        self.configuration_pub = rospy.Publisher('/equilibrium_confguration', Float32MultiArray, queue_size=0)
         self.force_feedback = 0.
         self.set_K = dynamic_reconfigure.client.Client('/dynamic_reconfigure_compliance_param_node', config_callback=None)
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
@@ -241,15 +242,8 @@ class Learning_from_Demonstration():
         self.set_stiffness_key()
 
         goal = PoseStamped()
+        self.set_stiffness(4000, 4000, 4000, 30, 30, 30, 40)
         for i in range(step_num):
-            ####### What is this joint 6 thing?
-            if self.curr_joint[6] > 2.85 or self.curr_joint[6] < -2.85:
-                desired_joints = self.curr_joint
-                desired_joints[6] = -desired_joints[6]
-                self.set_configuration(desired_joints)
-                self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 5)
-                rospy.sleep(5.0)
-                self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, self.K_ori, 5)
                    
             goal.header.seq = 1
             goal.header.stamp = rospy.Time.now()
@@ -266,8 +260,13 @@ class Learning_from_Demonstration():
             goal.pose.orientation.w = quat.w
             self.goal_pub.publish(goal)
             self.r.sleep()
+        rospy.sleep(2.0)
+        self.set_stiffness(4000, 4000, 4000, 30, 30, 30, 0)
+
 
     def execute(self, spiral_flag):
+        self.spiralling_occured = False
+
         print("spiral flag", bool(int(spiral_flag)))
         ##### Do we want to keep the sleep for closing the gripper?
         grip_command_old = self.recorded_gripper[0][0]
@@ -288,7 +287,22 @@ class Learning_from_Demonstration():
         	start = transform_pose(start, transform)
         self.go_to_pose(start)
 
+        # desired_joints = np.array(self.curr_joint)
+        # desired_joints[0] = 0.008477713281629244        
+        # self.set_stiffness(self.K_pos, self.K_pos, self.K_pos, self.K_ori, self.K_ori, 0, 5)
+        # self.set_configuration(desired_joints)
+        # rospy.sleep(5.0)
+        # self.set_stiffness_key()
+        # self.set_stiffness(100, 100, 100, 5, 5, 5, 100)
+        # null_space_reset = False
+
         for i in range (self.recorded_traj.shape[1]):
+            
+            # if i > 100 and not null_space_reset:
+            #     self.set_stiffness(4000, 4000, 4000, 30, 30, 30, 0)
+            #     null_space_reset = True
+
+
             goal = PoseStamped()
 
             goal.header.seq = 1
@@ -331,6 +345,7 @@ class Learning_from_Demonstration():
             
             if self.force.z > 10 and bool(int(spiral_flag)):
                 spiral_success, offset_correction = self.spiral_search(goal)
+                self.spiralling_occured = True
                 if spiral_success:
                     self.recorded_traj[0, i:] += offset_correction[0]
                     self.recorded_traj[1, i:] += offset_correction[1]
@@ -346,6 +361,8 @@ class Learning_from_Demonstration():
 
             grip_command_old = grip_command.data
             self.r.sleep()
+            if spiralling_occured:
+                print("spiralling occured")
 
             # Stop playback if at end of trajectory (some indices might be deleted by feedback)
             if i == self.recorded_traj.shape[1]-1:
