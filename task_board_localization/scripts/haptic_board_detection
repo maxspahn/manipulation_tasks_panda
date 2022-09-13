@@ -133,7 +133,7 @@ class BoardDetector():
         self.poses_x = []
         self.poses_x[:] = [array_quat_2_pose(point_x, self.ori_x) for point_x in self.points_x]
 
-        p1y = [self.board_length*0.6, -self.clearance, self.clearance]
+        p1y = [self.board_length*0.65, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.4]
         p3y = [p2y[0], -0.05, p2y[2]]
 
@@ -187,7 +187,7 @@ class BoardDetector():
             transform_icp = pose_st_2_transformation(self.pose_icp)
             transform_ref = np.load(f"{self.package_path}/models/{self.transform_ref_filename}")
             self.transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
-            # pdb.set_trace()
+            pdb.set_trace()
 
         poses_x_transformed = []
         poses_x_transformed[:] = [transform_pose(pose_x, self.transform) for pose_x in self.poses_x]
