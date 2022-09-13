@@ -25,6 +25,7 @@ class Learning_from_Demonstration():
         self.K_ns=10 ##### not being used
         self.feedback=np.zeros(4)
         self.feedback_gain=0.002
+        self.faster_counter=0
         self.length_scale = 0.03
         self.correction_window = 300
         self.curr_pos=None
@@ -325,7 +326,7 @@ class Learning_from_Demonstration():
             if self.pose_ref_2_new:
             	goal = transform_pose(goal, transform)
             
-            if np.sum(self.feedback)!=0:
+            if np.sum(self.feedback[:3])!=0:
                 for j in range(self.recorded_traj.shape[1]):
                     x = self.feedback[0]*self.square_exp(i, j)
                     y = self.feedback[1]*self.square_exp(i, j)
@@ -334,15 +335,18 @@ class Learning_from_Demonstration():
                     self.recorded_traj[0][j] += x
                     self.recorded_traj[1][j] += y
                     self.recorded_traj[2][j] += z
-
-                if self.feedback[3] > 0:
-                    self.recorded_traj = np.delete(self.recorded_traj, np.arange(np.min([i + 1, self.recorded_traj.shape[1]]),np.min([i + 6, self.recorded_traj.shape[1]])), 1)
-                    self.recorded_ori = np.delete(self.recorded_ori, np.arange(np.min([i + 1, self.recorded_ori.shape[1]]),np.min([i + 6, self.recorded_ori.shape[1]])), 1)
-                    self.recorded_gripper = np.delete(self.recorded_gripper, np.arange(np.min([i + 1, self.recorded_ori.shape[1]]),np.min([i + 6, self.recorded_ori.shape[1]])), 1)
-                self.feedback = np.zeros(4)
-
+                   
+            if self.feedback[3] != 0:
+                self.faster_counter = 10
+                
+            if self.faster_counter > 0 and i!=self.recorded_traj.shape[1]-1:
+                self.faster_counter -= 1
+                self.recorded_traj = np.delete(self.recorded_traj, i+1, 1)
+                self.recorded_ori = np.delete(self.recorded_ori, i+1, 1)
+                self.recorded_gripper = np.delete(self.recorded_gripper, i+1, 1)
+                
             self.goal_pub.publish(goal)
-            
+            self.feedback = np.zeros(4)
             if self.force.z > 10 and bool(int(spiral_flag)):
                 spiral_success, offset_correction = self.spiral_search(goal)
                 self.spiralling_occured = True
@@ -361,12 +365,12 @@ class Learning_from_Demonstration():
 
             grip_command_old = grip_command.data
             self.r.sleep()
-            if spiralling_occured:
-                print("spiralling occured")
 
             # Stop playback if at end of trajectory (some indices might be deleted by feedback)
             if i == self.recorded_traj.shape[1]-1:
                 break
+        if self.spiralling_occured:
+            print(f"recording {self.filename}, spiralling occured")
 
     def spiral_search(self, goal):
         goal_init = position_2_array(goal.pose.position)
@@ -438,3 +442,4 @@ class Learning_from_Demonstration():
         self.recorded_traj = data['traj']
         self.recorded_ori = data['ori']
         self.recorded_gripper = data['grip']
+        self.filename=str(file)
