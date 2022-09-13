@@ -127,7 +127,7 @@ class BoardDetector():
         # Point outside and above box
         p1x = [-self.clearance, self.board_width * 0.5, self.clearance]
         p2x = [p1x[0], p1x[1], -self.board_height*0.4]
-        p3x = [-0.05, p2x[1], p2x[2]]
+        p3x = [0.01, p2x[1], p2x[2]]
 
         self.points_x = [p1x, p2x, p3x]
         self.poses_x = []
@@ -135,7 +135,7 @@ class BoardDetector():
 
         p1y = [self.board_length*0.65, -self.clearance, self.clearance]
         p2y = [p1y[0], p1y[1], -self.board_height*0.4]
-        p3y = [p2y[0], -0.05, p2y[2]]
+        p3y = [p2y[0], 0.01, p2y[2]]
 
         self.points_y = [p1y, p2y, p3y]
         self.poses_y = []
@@ -150,7 +150,7 @@ class BoardDetector():
 
             self.go_to_pose(pose)
         pose_further = poses[-1]
-        while self.force_feedback <= 20:
+        while self.force_feedback <= 5:
             print("force feedback", self.force_feedback)
             if x_coll:
                 x_axis_vector = self.transform[:2, 0]
@@ -187,7 +187,7 @@ class BoardDetector():
             transform_icp = pose_st_2_transformation(self.pose_icp)
             transform_ref = np.load(f"{self.package_path}/models/{self.transform_ref_filename}")
             self.transform = transform_cam @ transform_icp @ np.linalg.inv(transform_cam) @ transform_ref
-            pdb.set_trace()
+            #pdb.set_trace()
 
         poses_x_transformed = []
         poses_x_transformed[:] = [transform_pose(pose_x, self.transform) for pose_x in self.poses_x]

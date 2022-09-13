@@ -26,7 +26,7 @@ class Learning_from_Demonstration():
         self.feedback=np.zeros(4)
         self.feedback_gain=0.002
         self.faster_counter=0
-        self.length_scale = 0.03
+        self.length_scale = 0.005
         self.correction_window = 300
         self.curr_pos=None
         self.curr_ori=None
@@ -347,7 +347,7 @@ class Learning_from_Demonstration():
                 
             self.goal_pub.publish(goal)
             self.feedback = np.zeros(4)
-            if self.force.z > 10 and bool(int(spiral_flag)):
+            if self.force.z > 9 and bool(int(spiral_flag)):
                 spiral_success, offset_correction = self.spiral_search(goal)
                 self.spiralling_occured = True
                 if spiral_success:
@@ -381,14 +381,14 @@ class Learning_from_Demonstration():
         spiral_success = False
         spiral_width = 2 * np.pi
         self.set_stiffness(4000, 4000, 1000, 30, 30, 30, 0)
-        for i in range(10000):
+        for i in range(5000):
             spiral_width = 2 * np.pi   ######### Should we make this a class variable?
             goal_pose.pose.position.x = pos_init[0] + np.cos(
                 spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
             goal_pose.pose.position.y = pos_init[1] + np.sin(
                 spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
             self.goal_pub.publish(goal_pose)
-            if self.force.z <= 2: #np.abs(goal_init[2] - self.curr_pos[2]) < 0.001:
+            if self.force.z <= 1: #np.abs(goal_init[2] - self.curr_pos[2]) < 0.001:
                 spiral_success = True
                 break
             time_spiral += 1. / 100.
