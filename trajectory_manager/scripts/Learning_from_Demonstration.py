@@ -381,7 +381,7 @@ class Learning_from_Demonstration():
         spiral_success = False
         spiral_width = 2 * np.pi
         self.set_stiffness(4000, 4000, 1000, 30, 30, 30, 0)
-        for i in range(5000):
+        for i in range(3000):
             spiral_width = 2 * np.pi   ######### Should we make this a class variable?
             goal_pose.pose.position.x = pos_init[0] + np.cos(
                 spiral_width * time_spiral) * 0.0005 * time_spiral  # What is the 0.02?
