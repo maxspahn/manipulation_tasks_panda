@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 '''
-@Author: Stan Zwinkels, Xinjie (Richard) Liu
+@Author: Mariano Ramirez, Stan Zwinkels, Xinjie (Richard) Liu
 @Date: 2022-4-25 16:46:30
 @LastEditTime: 2022-5-19 17:51:32
 @Description: communication node of the find_object_2d and board_detector
@@ -53,9 +53,11 @@ class BoardDetector():
         self.force_feedback_sub = rospy.Subscriber(force_torque_ext_topic, WrenchStamped, self.force_feedback_checker)
         self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
         # self.transform_icp_sub = rospy.Subscriber('/trans_rot', PoseStamped, self.transform_icp_callback)
+        self.joint_states_sub = rospy.Subscriber("/joint_states", JointState, self.joint_states_callback)
 
         self.goal_pub = rospy.Publisher(equilibrium_pose_topic, PoseStamped, queue_size=0)
         self.pose_ref_2_new_pub = rospy.Publisher(pose_ref_2_new_topic, PoseStamped, queue_size=0)
+        self.configuration_pub = rospy.Publisher('/equilibrium_confguration', Float32MultiArray, queue_size=0)
 
         self.pose_ref_2_new = PoseStamped()
         self.force_feedback = None
@@ -86,6 +88,11 @@ class BoardDetector():
         set_K.update_configuration({"rotational_stiffness_Y": k_r2})
         set_K.update_configuration({"rotational_stiffness_Z": k_r3})
         set_K.update_configuration({"nullspace_stiffness": k_ns})
+        
+    def set_configuration(self, joint):
+        joint_des = Float32MultiArray()
+        joint_des.data = np.array(joint).astype(np.float32)
+        self.configuration_pub.publish(joint_des) 
 
     def joint_states_callback(self, data):
         self.curr_joint = data.position[:7]
@@ -168,6 +175,10 @@ class BoardDetector():
         self.coll_oris_to_save.append(self.coll_oris[-1])
 
         self.go_to_pose(poses[0])
+        self.set_stiffness(0, 0, 0, 0, 0, 0, 40)
+        rospy.sleep(3.0)
+        self.set_stiffness(self.K_pos, self.K_pos, self.K_z, self.K_ori, self.K_ori, self.K_ori_z, 0.0)
+
     
     def execute_touch(self, offline):
         self.get_trajectories()
